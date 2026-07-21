@@ -6,7 +6,20 @@
 namespace iqforge {
 
 namespace {
-void plotIQ(const char* plotId, const std::vector<Sample>& data) {
+struct TimeDomainViewState {
+  bool hadData = false;
+};
+
+void plotIQ(const char* plotId, const std::vector<Sample>& data, TimeDomainViewState& view) {
+  bool fitRequested = ImGui::Button("Fit signal");
+  ImGui::SameLine();
+  ImGui::TextDisabled("Mouse wheel: zoom, drag: pan, double-click: fit");
+
+  if (data.empty()) view.hadData = false;
+  if (!view.hadData && !data.empty()) fitRequested = true;
+  view.hadData |= !data.empty();
+
+  if (fitRequested && !data.empty()) ImPlot::SetNextAxesToFit();
   if (ImPlot::BeginPlot(plotId, ImVec2(-1, 250))) {
     ImPlot::SetupAxes("Sample", "Amplitude");
     if (!data.empty()) {
@@ -21,14 +34,17 @@ void plotIQ(const char* plotId, const std::vector<Sample>& data) {
 } // namespace
 
 void drawTimeDomainPanel(AppState& state) {
+  static TimeDomainViewState rxView;
+  static TimeDomainViewState txView;
+
   ImGui::Begin("Time Domain");
   if (ImGui::BeginTabBar("TimeDomainTabs")) {
     if (ImGui::BeginTabItem("RX")) {
-      plotIQ("##rx_time", state.rxTimeDomain);
+      plotIQ("##rx_time", state.rxTimeDomain, rxView);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("TX preview")) {
-      plotIQ("##tx_time", state.txTimeDomain);
+      plotIQ("##tx_time", state.txTimeDomain, txView);
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
