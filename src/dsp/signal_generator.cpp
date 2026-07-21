@@ -1,6 +1,8 @@
 #include "signal_generator.h"
 
+#include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace iqforge {
 
@@ -12,16 +14,55 @@ double wrapPhase(double phase) {
   if (phase < 0.0) phase += kTwoPi;
   return phase;
 }
+
+GeneratorConfig clampBasebandFrequencies(GeneratorConfig cfg) {
+  const double nyquistHz = std::abs(cfg.sampleRateHz) * 0.5;
+  const auto clampFrequency = [nyquistHz](double hz) {
+    return std::clamp(hz, -nyquistHz, nyquistHz);
+  };
+
+  cfg.toneFreqHz = clampFrequency(cfg.toneFreqHz);
+  for (double& hz : cfg.multiToneFreqsHz) hz = clampFrequency(hz);
+  cfg.chirpStartFreqHz = clampFrequency(cfg.chirpStartFreqHz);
+  cfg.chirpEndFreqHz = clampFrequency(cfg.chirpEndFreqHz);
+  const double maxChipRateHz = std::abs(cfg.sampleRateHz);
+  cfg.barkerChipRateHz = std::clamp(cfg.barkerChipRateHz, 0.0, maxChipRateHz);
+  return cfg;
+}
+
+const std::vector<int>& barkerChips(BarkerCode code) {
+  static const std::vector<int> b2PlusMinus = {1, -1};
+  static const std::vector<int> b2PlusPlus = {1, 1};
+  static const std::vector<int> b3 = {1, 1, -1};
+  static const std::vector<int> b4PlusPlusMinusPlus = {1, 1, -1, 1};
+  static const std::vector<int> b4PlusPlusPlusMinus = {1, 1, 1, -1};
+  static const std::vector<int> b5 = {1, 1, 1, -1, 1};
+  static const std::vector<int> b7 = {1, 1, 1, -1, -1, 1, -1};
+  static const std::vector<int> b11 = {1, 1, 1, -1, -1, -1, 1, -1, -1, 1, -1};
+  static const std::vector<int> b13 = {1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1};
+
+  switch (code) {
+    case BarkerCode::B2PlusMinus: return b2PlusMinus;
+    case BarkerCode::B2PlusPlus: return b2PlusPlus;
+    case BarkerCode::B3: return b3;
+    case BarkerCode::B4PlusPlusMinusPlus: return b4PlusPlusMinusPlus;
+    case BarkerCode::B4PlusPlusPlusMinus: return b4PlusPlusPlusMinus;
+    case BarkerCode::B5: return b5;
+    case BarkerCode::B7: return b7;
+    case BarkerCode::B11: return b11;
+    case BarkerCode::B13: return b13;
+  }
+  return b13;
+}
 } // namespace
 
-SignalGenerator::SignalGenerator(GeneratorConfig cfg) : cfg_(std::move(cfg)) {
+SignalGenerator::SignalGenerator(GeneratorConfig cfg) : cfg_(clampBasebandFrequencies(std::move(cfg))) {
   multiTonePhases_.assign(cfg_.multiToneFreqsHz.size(), 0.0);
 }
 
 void SignalGenerator::setConfig(const GeneratorConfig& cfg) {
   std::lock_guard<std::mutex> lock(cfgMutex_);
-  cfg_ = cfg;
-  multiTonePhases_.assign(cfg_.multiToneFreqsHz.size(), 0.0);
+  cfg_ = clampBasebandFrequencies(cfg);
 }
 
 GeneratorConfig SignalGenerator::config() const {
@@ -34,15 +75,18 @@ size_t SignalGenerator::generate(Sample* out, size_t count) {
   {
     std::lock_guard<std::mutex> lock(cfgMutex_);
     cfg = cfg_;
-    if (multiTonePhases_.size() != cfg.multiToneFreqsHz.size()) {
-      multiTonePhases_.assign(cfg.multiToneFreqsHz.size(), 0.0);
-    }
+  }
+  // Phase state is owned exclusively by the thread calling generate().
+  // setConfig() only swaps cfg_, so live GUI updates cannot race this resize.
+  if (multiTonePhases_.size() != cfg.multiToneFreqsHz.size()) {
+    multiTonePhases_.resize(cfg.multiToneFreqsHz.size(), 0.0);
   }
 
   switch (cfg.type) {
     case WaveformType::Tone: generateTone(out, count, cfg); break;
     case WaveformType::MultiTone: generateMultiTone(out, count, cfg); break;
     case WaveformType::Chirp: generateChirp(out, count, cfg); break;
+    case WaveformType::Barker: generateBarker(out, count, cfg); break;
     case WaveformType::Noise: generateNoise(out, count, cfg); break;
     case WaveformType::Ramp: generateRamp(out, count, cfg); break;
   }
@@ -92,6 +136,28 @@ void SignalGenerator::generateChirp(Sample* out, size_t count, const GeneratorCo
     t += dt;
   }
   chirpTime_ = std::fmod(t, duration);
+}
+
+void SignalGenerator::generateBarker(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  const std::vector<int>& chips = barkerChips(cfg.barkerCode);
+  if (cfg.sampleRateHz <= 0.0 || cfg.barkerChipRateHz <= 0.0 || chips.empty()) {
+    std::fill(out, out + count, Sample(0.0f, 0.0f));
+    return;
+  }
+
+  size_t chipIndex = barkerChipIndex_ % chips.size();
+  double chipPhase = barkerChipPhase_;
+  const double chipsPerSample = cfg.barkerChipRateHz / cfg.sampleRateHz;
+  for (size_t i = 0; i < count; ++i) {
+    out[i] = Sample(cfg.amplitude * static_cast<float>(chips[chipIndex]), 0.0f);
+    chipPhase += chipsPerSample;
+    while (chipPhase >= 1.0) {
+      chipPhase -= 1.0;
+      chipIndex = (chipIndex + 1) % chips.size();
+    }
+  }
+  barkerChipIndex_ = chipIndex;
+  barkerChipPhase_ = chipPhase;
 }
 
 void SignalGenerator::generateNoise(Sample* out, size_t count, const GeneratorConfig& cfg) {

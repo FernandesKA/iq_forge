@@ -12,8 +12,23 @@ enum class WaveformType {
   Tone,
   MultiTone,
   Chirp,
+  Barker,
   Noise,
   Ramp,
+};
+
+// All Barker sequences, excluding variants obtainable only by negation or
+// reversal. Lengths 2 and 4 each have two distinct sequences.
+enum class BarkerCode {
+  B2PlusMinus,
+  B2PlusPlus,
+  B3,
+  B4PlusPlusMinusPlus,
+  B4PlusPlusPlusMinus,
+  B5,
+  B7,
+  B11,
+  B13,
 };
 
 struct GeneratorConfig {
@@ -31,6 +46,10 @@ struct GeneratorConfig {
   double chirpStartFreqHz = -400e3;
   double chirpEndFreqHz = 400e3;
   double chirpDurationSec = 1e-3;
+
+  // Barker: a continuously repeated BPSK chip sequence.
+  BarkerCode barkerCode = BarkerCode::B13;
+  double barkerChipRateHz = 100e3;
 
   float amplitude = 0.7f; // 0..1, leaves headroom to avoid clipping downstream
 };
@@ -50,6 +69,7 @@ class SignalGenerator : public ISampleSource {
   void generateTone(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateMultiTone(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateChirp(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void generateBarker(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateNoise(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateRamp(Sample* out, size_t count, const GeneratorConfig& cfg);
 
@@ -59,6 +79,8 @@ class SignalGenerator : public ISampleSource {
   double tonePhase_ = 0.0;
   std::vector<double> multiTonePhases_;
   double chirpTime_ = 0.0;
+  size_t barkerChipIndex_ = 0;
+  double barkerChipPhase_ = 0.0;
   float rampValue_ = -1.0f;
 
   std::mt19937 rng_{std::random_device{}()};

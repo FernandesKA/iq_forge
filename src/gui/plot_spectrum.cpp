@@ -6,7 +6,24 @@
 namespace iqforge {
 
 namespace {
-void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampleRateHz) {
+struct SpectrumViewState {
+  bool hadData = false;
+  double sampleRateHz = 0.0;
+};
+
+void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampleRateHz,
+                  SpectrumViewState& view) {
+  bool fitRequested = ImGui::Button("Fit signal");
+  ImGui::SameLine();
+  ImGui::TextDisabled("Mouse wheel: zoom, drag: pan, double-click: fit");
+
+  if (db.empty()) view.hadData = false;
+  const bool scaleChanged = view.sampleRateHz != sampleRateHz;
+  if ((!view.hadData && !db.empty()) || scaleChanged) fitRequested = true;
+  view.hadData |= !db.empty();
+  view.sampleRateHz = sampleRateHz;
+
+  if (fitRequested && !db.empty()) ImPlot::SetNextAxesToFit();
   if (ImPlot::BeginPlot(plotId, ImVec2(-1, 250))) {
     ImPlot::SetupAxes("Frequency (Hz, baseband)", "Power (dB)");
     if (!db.empty()) {
@@ -21,14 +38,17 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
 } // namespace
 
 void drawSpectrumPanel(AppState& state) {
+  static SpectrumViewState rxView;
+  static SpectrumViewState txView;
+
   ImGui::Begin("Spectrum");
   if (ImGui::BeginTabBar("SpectrumTabs")) {
     if (ImGui::BeginTabItem("RX")) {
-      plotSpectrum("##rx_spectrum", state.rxSpectrumDb, state.sampleRateHz);
+      plotSpectrum("##rx_spectrum", state.rxSpectrumDb, state.sampleRateHz, rxView);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("TX preview")) {
-      plotSpectrum("##tx_spectrum", state.txSpectrumDb, state.sampleRateHz);
+      plotSpectrum("##tx_spectrum", state.txSpectrumDb, state.sampleRateHz, txView);
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();

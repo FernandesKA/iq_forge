@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <string>
 
+#include "freq_input.h"
+
 namespace iqforge {
 
 namespace {
@@ -30,9 +32,17 @@ void drawDevicePanel(AppState& state) {
   ImGui::BeginDisabled(connected);
   {
     int kind = static_cast<int>(state.selectedKind);
-    if (ImGui::RadioButton("PlutoSDR", kind == 0)) state.selectedKind = DeviceKind::PlutoSDR;
+    if (ImGui::RadioButton("PlutoSDR", kind == 0) && kind != 0) {
+      state.selectedKind = DeviceKind::PlutoSDR;
+      state.txGainDb = kMinAtten;
+      state.rxGainDb = kZero;
+    }
     ImGui::SameLine();
-    if (ImGui::RadioButton("HackRF", kind == 1)) state.selectedKind = DeviceKind::HackRF;
+    if (ImGui::RadioButton("HackRF", kind == 1) && kind != 1) {
+      state.selectedKind = DeviceKind::HackRF;
+      state.txGainDb = kZero;
+      state.rxGainDb = kZero;
+    }
 
     ImGui::InputText("URI / Serial", state.uriBuffer, sizeof(state.uriBuffer));
     ImGui::TextDisabled("%s", kUriHint(state.selectedKind));
@@ -59,9 +69,9 @@ void drawDevicePanel(AppState& state) {
   ImGui::Separator();
 
   bool changed = false;
-  changed |= ImGui::InputDouble("Sample rate (Hz)", &state.sampleRateHz, 0.0, 0.0, "%.0f");
-  changed |= ImGui::InputDouble("Center freq (Hz)", &state.centerFreqHz, 0.0, 0.0, "%.0f");
-  changed |= ImGui::InputDouble("Bandwidth (Hz)", &state.bandwidthHz, 0.0, 0.0, "%.0f");
+  changed |= FrequencyInputHz("Sample rate", &state.sampleRateHz, &state.sampleRateUnit);
+  changed |= FrequencyInputHz("Center freq", &state.centerFreqHz, &state.centerFreqUnit);
+  changed |= FrequencyInputHz("Bandwidth", &state.bandwidthHz, &state.bandwidthUnit);
 
   bool txGainChanged = ImGui::SliderScalar(
       state.selectedKind == DeviceKind::HackRF ? "TX VGA gain (dB)" : "TX attenuation (dB)",

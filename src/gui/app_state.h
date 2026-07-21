@@ -13,6 +13,7 @@
 #include "../dsp/fft_processor.h"
 #include "../dsp/iq_file.h"
 #include "../dsp/signal_generator.h"
+#include "freq_input.h"
 
 namespace iqforge {
 
@@ -32,8 +33,11 @@ struct AppState {
   double sampleRateHz = 3e6; // PlutoSDR's standard firmware rejects rates below ~2.083 MSPS
   double centerFreqHz = 915e6;
   double bandwidthHz = 2e6;
-  double txGainDb = -10.0;
-  double rxGainDb = 30.0;
+  FreqUnit sampleRateUnit = FreqUnit::MHz;
+  FreqUnit centerFreqUnit = FreqUnit::MHz;
+  FreqUnit bandwidthUnit = FreqUnit::MHz;
+  double txGainDb = -89.75; // maximum PlutoSDR TX attenuation (safest startup level)
+  double rxGainDb = 0.0;    // minimum RX gain
   std::string connectError;
   std::vector<ScannedDevice> scanResults;
 
@@ -41,6 +45,11 @@ struct AppState {
   int txSourceMode = 0; // 0 = generator, 1 = IQ file
   std::shared_ptr<SignalGenerator> generator = std::make_shared<SignalGenerator>();
   GeneratorConfig genConfig;
+  FreqUnit toneFreqUnit = FreqUnit::kHz;
+  FreqUnit multiToneUnit = FreqUnit::kHz; // shared by all entries in genConfig.multiToneFreqsHz
+  FreqUnit chirpStartUnit = FreqUnit::kHz;
+  FreqUnit chirpEndUnit = FreqUnit::kHz;
+  FreqUnit barkerChipRateUnit = FreqUnit::kHz;
   char filePathBuffer[512] = "";
   bool fileLoop = true;
   std::string txError;

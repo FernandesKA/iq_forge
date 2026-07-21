@@ -3,12 +3,41 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
+
+#include "freq_input.h"
 
 namespace iqforge {
 
 namespace {
-const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Noise", "Ramp"};
+const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Barker", "Noise", "Ramp"};
+const char* kBarkerCodeNames[] = {
+    "B2  [+ -]",       "B2  [+ +]",       "B3  [+ + -]",
+    "B4  [+ + - +]",   "B4  [+ + + -]",   "B5  [+ + + - +]",
+    "B7  [+ + + - - + -]", "B11 [+ + + - - - + - - + -]",
+    "B13 [+ + + + + - - + + - + - +]"};
+
+bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
+  const double nyquistHz = std::abs(sampleRateHz) * 0.5;
+  const auto clampFrequency = [nyquistHz](double& hz) {
+    const double clamped = std::clamp(hz, -nyquistHz, nyquistHz);
+    if (clamped == hz) return false;
+    hz = clamped;
+    return true;
+  };
+
+  bool changed = clampFrequency(cfg.toneFreqHz);
+  for (double& hz : cfg.multiToneFreqsHz) changed |= clampFrequency(hz);
+  changed |= clampFrequency(cfg.chirpStartFreqHz);
+  changed |= clampFrequency(cfg.chirpEndFreqHz);
+  const double clampedChipRate = std::clamp(cfg.barkerChipRateHz, 0.0, std::abs(sampleRateHz));
+  if (clampedChipRate != cfg.barkerChipRateHz) {
+    cfg.barkerChipRateHz = clampedChipRate;
+    changed = true;
+  }
+  return changed;
+}
 }
 
 void drawTxPanel(AppState& state) {
@@ -17,50 +46,89 @@ void drawTxPanel(AppState& state) {
   bool connected = state.deviceManager.isConnected();
   bool active = state.isTxActive();
 
+  ImGui::BeginDisabled(active);
   ImGui::RadioButton("Signal generator", &state.txSourceMode, 0);
   ImGui::SameLine();
   ImGui::RadioButton("IQ file", &state.txSourceMode, 1);
+  ImGui::EndDisabled();
 
-  ImGui::BeginDisabled(active);
   if (state.txSourceMode == 0) {
+    bool generatorChanged = clampGeneratorFrequencies(state.genConfig, state.sampleRateHz);
+    if (state.genConfig.sampleRateHz != state.sampleRateHz) {
+      state.genConfig.sampleRateHz = state.sampleRateHz;
+      generatorChanged = true;
+    }
+    const double nyquistHz = std::abs(state.sampleRateHz) * 0.5;
     int type = static_cast<int>(state.genConfig.type);
     if (ImGui::Combo("Waveform", &type, kWaveformNames, IM_ARRAYSIZE(kWaveformNames))) {
       state.genConfig.type = static_cast<WaveformType>(type);
+      generatorChanged = true;
     }
-    ImGui::SliderFloat("Amplitude", &state.genConfig.amplitude, 0.0f, 1.0f);
+    generatorChanged |= ImGui::SliderFloat("Amplitude", &state.genConfig.amplitude, 0.0f, 1.0f);
 
     switch (state.genConfig.type) {
       case WaveformType::Tone:
-        ImGui::InputDouble("Tone freq (Hz)", &state.genConfig.toneFreqHz, 0.0, 0.0, "%.0f");
+        generatorChanged |= FrequencyInputHz("Tone freq", &state.genConfig.toneFreqHz, &state.toneFreqUnit);
         break;
       case WaveformType::MultiTone: {
         int n = static_cast<int>(state.genConfig.multiToneFreqsHz.size());
         if (ImGui::InputInt("Tone count", &n)) {
           n = std::clamp(n, 1, 8);
           state.genConfig.multiToneFreqsHz.resize(n, 100e3);
+          generatorChanged = true;
         }
         for (size_t i = 0; i < state.genConfig.multiToneFreqsHz.size(); ++i) {
           ImGui::PushID(static_cast<int>(i));
-          ImGui::InputDouble("Freq (Hz)", &state.genConfig.multiToneFreqsHz[i], 0.0, 0.0, "%.0f");
+          generatorChanged |=
+              FrequencyInputHz("Freq", &state.genConfig.multiToneFreqsHz[i], &state.multiToneUnit);
           ImGui::PopID();
         }
         break;
       }
       case WaveformType::Chirp:
-        ImGui::InputDouble("Start freq (Hz)", &state.genConfig.chirpStartFreqHz, 0.0, 0.0, "%.0f");
-        ImGui::InputDouble("End freq (Hz)", &state.genConfig.chirpEndFreqHz, 0.0, 0.0, "%.0f");
-        ImGui::InputDouble("Sweep duration (s)", &state.genConfig.chirpDurationSec, 0.0, 0.0, "%.6f");
+        generatorChanged |=
+            FrequencyInputHz("Start freq", &state.genConfig.chirpStartFreqHz, &state.chirpStartUnit);
+        generatorChanged |=
+            FrequencyInputHz("End freq", &state.genConfig.chirpEndFreqHz, &state.chirpEndUnit);
+        generatorChanged |= ImGui::InputDouble(
+            "Sweep duration (s)", &state.genConfig.chirpDurationSec, 0.0, 0.0, "%.6f");
         break;
+      case WaveformType::Barker: {
+        int code = static_cast<int>(state.genConfig.barkerCode);
+        if (ImGui::Combo("Barker code", &code, kBarkerCodeNames, IM_ARRAYSIZE(kBarkerCodeNames))) {
+          state.genConfig.barkerCode = static_cast<BarkerCode>(code);
+          generatorChanged = true;
+        }
+        generatorChanged |= FrequencyInputHz(
+            "Chip rate", &state.genConfig.barkerChipRateHz, &state.barkerChipRateUnit);
+        break;
+      }
       case WaveformType::Noise:
       case WaveformType::Ramp:
         break;
     }
+
+    // Complex IQ can represent baseband offsets only inside the Nyquist
+    // interval. Values outside it would wrap to an unexpected RF frequency.
+    generatorChanged |= clampGeneratorFrequencies(state.genConfig, state.sampleRateHz);
+    if (state.genConfig.type == WaveformType::Barker) {
+      ImGui::TextDisabled("Allowed chip rate: 0 .. %.6g MHz", std::abs(state.sampleRateHz) / 1e6);
+    } else {
+      ImGui::TextDisabled("Allowed frequency offset: %.6g .. +%.6g MHz",
+                          -nyquistHz / 1e6, nyquistHz / 1e6);
+    }
+
+    if (active && generatorChanged) {
+      state.genConfig.sampleRateHz = state.sampleRateHz;
+      state.generator->setConfig(state.genConfig);
+    }
   } else {
+    ImGui::BeginDisabled(active);
     ImGui::InputText("File path", state.filePathBuffer, sizeof(state.filePathBuffer));
     ImGui::Checkbox("Loop", &state.fileLoop);
     ImGui::TextDisabled("Formats: .cf32/.fc32 (float32 IQ), .ci16/.sc16 (int16 IQ), .wav (PCM16)");
+    ImGui::EndDisabled();
   }
-  ImGui::EndDisabled();
 
   ImGui::Separator();
 
