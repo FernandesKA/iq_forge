@@ -47,6 +47,13 @@ class IDevice {
   virtual void close() = 0;
   virtual bool isOpen() const = 0;
 
+  // Round-trips a cheap query to the hardware to confirm it is still
+  // reachable (e.g. still plugged in). isOpen() alone only reflects local
+  // handle state, which stays "open" even after the device physically
+  // disappears -- callers should poll this periodically and disconnect on
+  // failure to keep the UI's connected state honest.
+  virtual bool checkAlive() = 0;
+
   virtual bool startTx(std::shared_ptr<ISampleSource> source, std::string& errorOut) = 0;
   virtual void stopTx() = 0;
   virtual bool isTxRunning() const = 0;

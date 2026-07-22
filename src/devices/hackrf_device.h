@@ -22,6 +22,7 @@ class HackRFDevice : public IDevice {
   bool open(const DeviceConfig& cfg, std::string& errorOut) override;
   void close() override;
   bool isOpen() const override { return dev_ != nullptr; }
+  bool checkAlive() override;
 
   bool startTx(std::shared_ptr<ISampleSource> source, std::string& errorOut) override;
   void stopTx() override;

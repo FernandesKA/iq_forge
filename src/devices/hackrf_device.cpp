@@ -59,6 +59,12 @@ bool HackRFDevice::open(const DeviceConfig& cfg, std::string& errorOut) {
   return true;
 }
 
+bool HackRFDevice::checkAlive() {
+  if (!dev_) return false;
+  uint8_t boardId = 0;
+  return hackrf_board_id_read(dev_, &boardId) == HACKRF_SUCCESS;
+}
+
 void HackRFDevice::close() {
   stopTx();
   stopRx();

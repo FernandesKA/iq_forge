@@ -28,6 +28,10 @@ void processSpectrum(FftProcessor& fft, const SampleBuffer& block, std::vector<f
 } // namespace
 
 void AppState::updateDisplays() {
+  if (deviceManager.pollHealth()) {
+    log("Device disconnected (lost communication)");
+  }
+
   SampleBuffer block;
   bool gotRx = false;
   while (rxRing.tryPop(block)) {

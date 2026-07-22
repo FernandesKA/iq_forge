@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -18,8 +19,17 @@ class DeviceManager {
   const IDevice* device() const { return device_.get(); }
   bool isConnected() const { return device_ != nullptr && device_->isOpen(); }
 
+  // Periodically pings the connected device's hardware (throttled to about
+  // once a second) and disconnects it if the ping fails. isOpen() alone
+  // never notices a device that physically disappeared -- only close()
+  // clears it -- so without this, "Connected" stays shown forever after an
+  // unplug. Call once per GUI frame; returns true the frame it actually
+  // detects and acts on a lost connection (so the caller can log it).
+  bool pollHealth();
+
  private:
   std::unique_ptr<IDevice> device_;
+  std::chrono::steady_clock::time_point lastHealthCheck_{};
 };
 
 } // namespace iqforge

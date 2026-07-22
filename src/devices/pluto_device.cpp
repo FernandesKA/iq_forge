@@ -125,6 +125,14 @@ bool PlutoDevice::open(const DeviceConfig& cfg, std::string& errorOut) {
   return true;
 }
 
+bool PlutoDevice::checkAlive() {
+  if (!phy_) return false;
+  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  if (!rxPhy) return false;
+  long long value = 0;
+  return iio_channel_attr_read_longlong(rxPhy, "sampling_frequency", &value) == 0;
+}
+
 void PlutoDevice::close() {
   stopTx();
   stopRx();

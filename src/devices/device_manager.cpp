@@ -34,4 +34,18 @@ void DeviceManager::disconnect() {
   }
 }
 
+bool DeviceManager::pollHealth() {
+  if (!device_ || !device_->isOpen()) return false;
+
+  constexpr auto kHealthCheckInterval = std::chrono::seconds(1);
+  auto now = std::chrono::steady_clock::now();
+  if (now - lastHealthCheck_ < kHealthCheckInterval) return false;
+  lastHealthCheck_ = now;
+
+  if (device_->checkAlive()) return false;
+
+  disconnect();
+  return true;
+}
+
 } // namespace iqforge
