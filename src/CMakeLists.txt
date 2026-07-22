@@ -22,6 +22,7 @@ add_executable(iqforge
   gui/log_panel.cpp
   gui/freq_input.cpp
   gui/duration_input.cpp
+  gui/file_browser.cpp
   gui/panel_device.cpp
   gui/panel_tx.cpp
   gui/panel_rx.cpp

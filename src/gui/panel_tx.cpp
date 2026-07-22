@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "duration_input.h"
+#include "file_browser.h"
 #include "freq_input.h"
 
 namespace iqforge {
@@ -161,9 +162,13 @@ void drawTxPanel(AppState& state) {
   } else {
     ImGui::BeginDisabled(active);
     ImGui::InputText("File path", state.filePathBuffer, sizeof(state.filePathBuffer));
+    ImGui::SameLine();
+    bool browseClicked = ImGui::Button("Browse...");
     ImGui::Checkbox("Loop", &state.fileLoop);
     ImGui::TextDisabled("Formats: .cf32/.fc32 (float32 IQ), .ci16/.sc16 (int16 IQ), .wav (PCM16)");
     ImGui::EndDisabled();
+
+    DrawIqFileBrowserPopup("Select IQ file", browseClicked, state.filePathBuffer, sizeof(state.filePathBuffer));
   }
 
   ImGui::Separator();
