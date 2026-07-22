@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include "input_commit.h"
+
 namespace iqforge {
 
 namespace {
@@ -17,10 +19,11 @@ bool FrequencyInputHz(const char* label, double* hz, FreqUnit* unit) {
 
   double display = *hz / kMultipliers[unitIdx];
   ImGui::SetNextItemWidth(140.0f);
-  if (ImGui::InputDouble("##value", &display, 0.0, 0.0, "%.6g")) {
-    *hz = display * kMultipliers[unitIdx];
-    changed = true;
-  }
+  bool rawChanged = ImGui::InputDouble("##value", &display, 0.0, 0.0, "%.6g");
+  if (rawChanged) *hz = display * kMultipliers[unitIdx];
+  // Only report a commit once editing settles (blur/Enter or idle timeout),
+  // not on every keystroke -- callers apply this straight to hardware.
+  if (GateInputCommit(rawChanged)) changed = true;
 
   for (int i = 0; i < 4; ++i) {
     ImGui::SameLine(0.0f, 4.0f);
