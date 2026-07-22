@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "../src/dsp/fft_processor.h"
@@ -10,6 +11,21 @@ using namespace iqforge;
 namespace {
 size_t peakBin(const std::vector<float>& db) {
   return static_cast<size_t>(std::max_element(db.begin(), db.end()) - db.begin());
+}
+
+double wrapToPi(double phase) {
+  constexpr double kPi = 3.14159265358979323846;
+  while (phase > kPi) phase -= 2.0 * kPi;
+  while (phase < -kPi) phase += 2.0 * kPi;
+  return phase;
+}
+
+// Estimates instantaneous frequency (Hz) from the phase step between two
+// adjacent IQ samples taken sampleRateHz apart.
+double instFreqHz(const Sample& a, const Sample& b, double sampleRateHz) {
+  constexpr double kTwoPi = 6.283185307179586476925286766559;
+  double dPhase = wrapToPi(std::atan2(b.imag(), b.real()) - std::atan2(a.imag(), a.real()));
+  return dPhase / kTwoPi * sampleRateHz;
 }
 } // namespace
 
@@ -86,8 +102,7 @@ void run_signal_generator_tests() {
     cfg.sampleRateHz = sampleRate;
     cfg.toneFreqHz = 100e6;
     cfg.multiToneFreqsHz = {-100e6, 100e6};
-    cfg.chirpStartFreqHz = -100e6;
-    cfg.chirpEndFreqHz = 100e6;
+    cfg.chirpDeviationHz = 200e6;
     cfg.barkerChipRateHz = 100e6;
 
     SignalGenerator gen(cfg);
@@ -95,8 +110,7 @@ void run_signal_generator_tests() {
     CHECK(actual.toneFreqHz == sampleRate / 2.0);
     CHECK(actual.multiToneFreqsHz[0] == -sampleRate / 2.0);
     CHECK(actual.multiToneFreqsHz[1] == sampleRate / 2.0);
-    CHECK(actual.chirpStartFreqHz == -sampleRate / 2.0);
-    CHECK(actual.chirpEndFreqHz == sampleRate / 2.0);
+    CHECK(actual.chirpDeviationHz == sampleRate);
     CHECK(actual.barkerChipRateHz == sampleRate);
 
     cfg.toneFreqHz = -100e6;
@@ -174,5 +188,61 @@ void run_signal_generator_tests() {
     for (const auto& s : buf) {
       CHECK(std::abs(s) <= 1.01f);
     }
+  }
+
+  // Chirp (LFM) instantaneous frequency must ramp linearly across the
+  // configured deviation (centered on 0 Hz) over one sweep, hold constant
+  // amplitude, and restart (sawtooth) after chirpDurationSec elapses.
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Chirp;
+    cfg.sampleRateHz = sampleRate;
+    cfg.chirpDeviationHz = 400e3;
+    const size_t sweepSamples = 4096;
+    cfg.chirpDurationSec = static_cast<double>(sweepSamples) / sampleRate;
+    cfg.amplitude = 1.0f;
+    SignalGenerator gen(cfg);
+
+    std::vector<Sample> buf(sweepSamples);
+    gen.generate(buf.data(), buf.size());
+
+    for (const auto& s : buf) {
+      CHECK(std::abs(s) >= 0.99f && std::abs(s) <= 1.01f);
+    }
+
+    const double dt = 1.0 / sampleRate;
+    const double startFreq = -cfg.chirpDeviationHz / 2.0;
+    const double k = cfg.chirpDeviationHz / cfg.chirpDurationSec;
+    const size_t checkIdx[] = {5, sweepSamples / 4, sweepSamples / 2, sweepSamples * 3 / 4 - 1};
+    for (size_t i : checkIdx) {
+      double expected = startFreq + k * (static_cast<double>(i) * dt);
+      double actual = instFreqHz(buf[i], buf[i + 1], sampleRate);
+      CHECK(std::abs(actual - expected) < 2000.0);
+    }
+
+    // Sweep repeats: the next buffer should again start near -deviation/2.
+    std::vector<Sample> buf2(10);
+    gen.generate(buf2.data(), buf2.size());
+    double restartFreq = instFreqHz(buf2[0], buf2[1], sampleRate);
+    CHECK(std::abs(restartFreq - startFreq) < 2000.0);
+  }
+
+  // A negative deviation must produce a down-chirp (frequency decreasing).
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Chirp;
+    cfg.sampleRateHz = sampleRate;
+    cfg.chirpDeviationHz = -400e3;
+    cfg.chirpDurationSec = 4096.0 / sampleRate;
+    cfg.amplitude = 1.0f;
+    SignalGenerator gen(cfg);
+
+    std::vector<Sample> buf(4096);
+    gen.generate(buf.data(), buf.size());
+
+    double freqStart = instFreqHz(buf[5], buf[6], sampleRate);
+    double freqEnd = instFreqHz(buf[3000], buf[3001], sampleRate);
+    CHECK(freqStart > freqEnd);
+    CHECK(std::abs(freqStart - 200e3) < 2000.0);
   }
 }

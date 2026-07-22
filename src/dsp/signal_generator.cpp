@@ -23,8 +23,9 @@ GeneratorConfig clampBasebandFrequencies(GeneratorConfig cfg) {
 
   cfg.toneFreqHz = clampFrequency(cfg.toneFreqHz);
   for (double& hz : cfg.multiToneFreqsHz) hz = clampFrequency(hz);
-  cfg.chirpStartFreqHz = clampFrequency(cfg.chirpStartFreqHz);
-  cfg.chirpEndFreqHz = clampFrequency(cfg.chirpEndFreqHz);
+  // Deviation spans both sides of 0 Hz (+-deviation/2), so its magnitude may
+  // be up to a full sample rate before either endpoint exceeds Nyquist.
+  cfg.chirpDeviationHz = std::clamp(cfg.chirpDeviationHz, -std::abs(cfg.sampleRateHz), std::abs(cfg.sampleRateHz));
   const double maxChipRateHz = std::abs(cfg.sampleRateHz);
   cfg.barkerChipRateHz = std::clamp(cfg.barkerChipRateHz, 0.0, maxChipRateHz);
   return cfg;
@@ -123,14 +124,14 @@ void SignalGenerator::generateMultiTone(Sample* out, size_t count, const Generat
 void SignalGenerator::generateChirp(Sample* out, size_t count, const GeneratorConfig& cfg) {
   const double dt = 1.0 / cfg.sampleRateHz;
   const double duration = cfg.chirpDurationSec > 0.0 ? cfg.chirpDurationSec : 1e-3;
-  const double bandwidth = cfg.chirpEndFreqHz - cfg.chirpStartFreqHz;
-  const double k = bandwidth / duration; // Hz/sec sweep rate
+  const double startFreq = -cfg.chirpDeviationHz / 2.0;
+  const double k = cfg.chirpDeviationHz / duration; // Hz/sec sweep rate
 
   double t = chirpTime_;
   double phase = 0.0;
   for (size_t i = 0; i < count; ++i) {
     const double tMod = std::fmod(t, duration);
-    const double instFreq = cfg.chirpStartFreqHz + k * tMod;
+    const double instFreq = startFreq + k * tMod;
     phase = wrapPhase(phase + kTwoPi * instFreq * dt);
     out[i] = Sample(cfg.amplitude * std::cos(phase), cfg.amplitude * std::sin(phase));
     t += dt;

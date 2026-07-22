@@ -41,10 +41,10 @@ struct GeneratorConfig {
   // MultiTone
   std::vector<double> multiToneFreqsHz = {50e3, 150e3, 300e3};
 
-  // Chirp: linear sweep from startFreqHz to endFreqHz over durationSec, then
-  // repeats (sawtooth sweep).
-  double chirpStartFreqHz = -400e3;
-  double chirpEndFreqHz = 400e3;
+  // Chirp: linear sweep of chirpDeviationHz total bandwidth, centered on 0 Hz
+  // baseband (i.e. from -deviation/2 to +deviation/2), over durationSec, then
+  // repeats (sawtooth sweep). A negative deviation produces a down-chirp.
+  double chirpDeviationHz = 800e3;
   double chirpDurationSec = 1e-3;
 
   // Barker: a continuously repeated BPSK chip sequence.

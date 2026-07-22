@@ -6,6 +6,7 @@
 #include <cmath>
 #include <memory>
 
+#include "duration_input.h"
 #include "freq_input.h"
 
 namespace iqforge {
@@ -29,8 +30,13 @@ bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
 
   bool changed = clampFrequency(cfg.toneFreqHz);
   for (double& hz : cfg.multiToneFreqsHz) changed |= clampFrequency(hz);
-  changed |= clampFrequency(cfg.chirpStartFreqHz);
-  changed |= clampFrequency(cfg.chirpEndFreqHz);
+  // Deviation spans both sides of 0 Hz (+-deviation/2), so its magnitude may
+  // be up to a full sample rate before either endpoint exceeds Nyquist.
+  const double clampedDeviation = std::clamp(cfg.chirpDeviationHz, -std::abs(sampleRateHz), std::abs(sampleRateHz));
+  if (clampedDeviation != cfg.chirpDeviationHz) {
+    cfg.chirpDeviationHz = clampedDeviation;
+    changed = true;
+  }
   const double clampedChipRate = std::clamp(cfg.barkerChipRateHz, 0.0, std::abs(sampleRateHz));
   if (clampedChipRate != cfg.barkerChipRateHz) {
     cfg.barkerChipRateHz = clampedChipRate;
@@ -86,12 +92,10 @@ void drawTxPanel(AppState& state) {
         break;
       }
       case WaveformType::Chirp:
-        generatorChanged |=
-            FrequencyInputHz("Start freq", &state.genConfig.chirpStartFreqHz, &state.chirpStartUnit);
-        generatorChanged |=
-            FrequencyInputHz("End freq", &state.genConfig.chirpEndFreqHz, &state.chirpEndUnit);
-        generatorChanged |= ImGui::InputDouble(
-            "Sweep duration (s)", &state.genConfig.chirpDurationSec, 0.0, 0.0, "%.6f");
+        generatorChanged |= FrequencyInputHz(
+            "Deviation", &state.genConfig.chirpDeviationHz, &state.chirpDeviationUnit);
+        generatorChanged |= DurationInputSec(
+            "Sweep duration", &state.genConfig.chirpDurationSec, &state.chirpDurationUnit);
         break;
       case WaveformType::Barker: {
         int code = static_cast<int>(state.genConfig.barkerCode);
@@ -113,6 +117,9 @@ void drawTxPanel(AppState& state) {
     generatorChanged |= clampGeneratorFrequencies(state.genConfig, state.sampleRateHz);
     if (state.genConfig.type == WaveformType::Barker) {
       ImGui::TextDisabled("Allowed chip rate: 0 .. %.6g MHz", std::abs(state.sampleRateHz) / 1e6);
+    } else if (state.genConfig.type == WaveformType::Chirp) {
+      ImGui::TextDisabled("Allowed deviation: %.6g .. +%.6g MHz",
+                          -std::abs(state.sampleRateHz) / 1e6, std::abs(state.sampleRateHz) / 1e6);
     } else {
       ImGui::TextDisabled("Allowed frequency offset: %.6g .. +%.6g MHz",
                           -nyquistHz / 1e6, nyquistHz / 1e6);

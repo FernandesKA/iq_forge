@@ -13,6 +13,7 @@
 #include "../dsp/fft_processor.h"
 #include "../dsp/iq_file.h"
 #include "../dsp/signal_generator.h"
+#include "duration_input.h"
 #include "freq_input.h"
 
 namespace iqforge {
@@ -47,8 +48,8 @@ struct AppState {
   GeneratorConfig genConfig;
   FreqUnit toneFreqUnit = FreqUnit::kHz;
   FreqUnit multiToneUnit = FreqUnit::kHz; // shared by all entries in genConfig.multiToneFreqsHz
-  FreqUnit chirpStartUnit = FreqUnit::kHz;
-  FreqUnit chirpEndUnit = FreqUnit::kHz;
+  FreqUnit chirpDeviationUnit = FreqUnit::kHz;
+  TimeUnit chirpDurationUnit = TimeUnit::Ms;
   FreqUnit barkerChipRateUnit = FreqUnit::kHz;
   char filePathBuffer[512] = "";
   bool fileLoop = true;
