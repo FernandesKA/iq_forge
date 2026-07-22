@@ -12,6 +12,7 @@ enum class WaveformType {
   Tone,
   MultiTone,
   Chirp,
+  Pulse,
   Barker,
   Noise,
   Ramp,
@@ -51,6 +52,18 @@ struct GeneratorConfig {
   BarkerCode barkerCode = BarkerCode::B13;
   double barkerChipRateHz = 100e3;
 
+  // Pulse: a rectangular constant-amplitude (real) carrier gated on for
+  // pulseDurationSec out of every pulsePeriodSec, then repeats. The same two
+  // fields also drive the envelope below, so pulse timing is configured in
+  // one place regardless of how it's applied.
+  double pulseDurationSec = 10e-6;
+  double pulsePeriodSec = 100e-6;
+
+  // Envelope: gates any *other* waveform type on/off using the pulse timing
+  // above, e.g. turning a chirp into a pulsed LFM radar signal. Ignored for
+  // WaveformType::Pulse, which always applies its own gating.
+  bool envelopeEnabled = false;
+
   float amplitude = 0.7f; // 0..1, leaves headroom to avoid clipping downstream
 };
 
@@ -69,9 +82,11 @@ class SignalGenerator : public ISampleSource {
   void generateTone(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateMultiTone(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateChirp(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void generatePulse(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateBarker(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateNoise(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateRamp(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void applyEnvelope(Sample* out, size_t count, const GeneratorConfig& cfg);
 
   mutable std::mutex cfgMutex_;
   GeneratorConfig cfg_;
@@ -79,6 +94,7 @@ class SignalGenerator : public ISampleSource {
   double tonePhase_ = 0.0;
   std::vector<double> multiTonePhases_;
   double chirpTime_ = 0.0;
+  double envelopeTime_ = 0.0;
   size_t barkerChipIndex_ = 0;
   double barkerChipPhase_ = 0.0;
   float rampValue_ = -1.0f;

@@ -12,7 +12,7 @@
 namespace iqforge {
 
 namespace {
-const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Barker", "Noise", "Ramp"};
+const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Pulse", "Barker", "Noise", "Ramp"};
 const char* kBarkerCodeNames[] = {
     "B2  [+ -]",       "B2  [+ +]",       "B3  [+ + -]",
     "B4  [+ + - +]",   "B4  [+ + + -]",   "B5  [+ + + - +]",
@@ -40,6 +40,16 @@ bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
   const double clampedChipRate = std::clamp(cfg.barkerChipRateHz, 0.0, std::abs(sampleRateHz));
   if (clampedChipRate != cfg.barkerChipRateHz) {
     cfg.barkerChipRateHz = clampedChipRate;
+    changed = true;
+  }
+  const double clampedPeriod = cfg.pulsePeriodSec > 0.0 ? cfg.pulsePeriodSec : 1e-6;
+  if (clampedPeriod != cfg.pulsePeriodSec) {
+    cfg.pulsePeriodSec = clampedPeriod;
+    changed = true;
+  }
+  const double clampedPulseDuration = std::clamp(cfg.pulseDurationSec, 0.0, cfg.pulsePeriodSec);
+  if (clampedPulseDuration != cfg.pulseDurationSec) {
+    cfg.pulseDurationSec = clampedPulseDuration;
     changed = true;
   }
   return changed;
@@ -97,6 +107,12 @@ void drawTxPanel(AppState& state) {
         generatorChanged |= DurationInputSec(
             "Sweep duration", &state.genConfig.chirpDurationSec, &state.chirpDurationUnit);
         break;
+      case WaveformType::Pulse:
+        generatorChanged |= DurationInputSec(
+            "Pulse duration", &state.genConfig.pulseDurationSec, &state.pulseDurationUnit);
+        generatorChanged |= DurationInputSec(
+            "Pulse period", &state.genConfig.pulsePeriodSec, &state.pulsePeriodUnit);
+        break;
       case WaveformType::Barker: {
         int code = static_cast<int>(state.genConfig.barkerCode);
         if (ImGui::Combo("Barker code", &code, kBarkerCodeNames, IM_ARRAYSIZE(kBarkerCodeNames))) {
@@ -112,6 +128,19 @@ void drawTxPanel(AppState& state) {
         break;
     }
 
+    // Any non-Pulse waveform can optionally be gated by the same rectangular
+    // envelope Pulse uses on its own, turning it into a pulsed signal (e.g.
+    // a pulsed chirp for radar-style testing).
+    if (state.genConfig.type != WaveformType::Pulse) {
+      generatorChanged |= ImGui::Checkbox("Pulse envelope", &state.genConfig.envelopeEnabled);
+      if (state.genConfig.envelopeEnabled) {
+        generatorChanged |= DurationInputSec(
+            "Pulse duration", &state.genConfig.pulseDurationSec, &state.pulseDurationUnit);
+        generatorChanged |= DurationInputSec(
+            "Pulse period", &state.genConfig.pulsePeriodSec, &state.pulsePeriodUnit);
+      }
+    }
+
     // Complex IQ can represent baseband offsets only inside the Nyquist
     // interval. Values outside it would wrap to an unexpected RF frequency.
     generatorChanged |= clampGeneratorFrequencies(state.genConfig, state.sampleRateHz);
@@ -120,7 +149,7 @@ void drawTxPanel(AppState& state) {
     } else if (state.genConfig.type == WaveformType::Chirp) {
       ImGui::TextDisabled("Allowed deviation: %.6g .. +%.6g MHz",
                           -std::abs(state.sampleRateHz) / 1e6, std::abs(state.sampleRateHz) / 1e6);
-    } else {
+    } else if (state.genConfig.type != WaveformType::Pulse) {
       ImGui::TextDisabled("Allowed frequency offset: %.6g .. +%.6g MHz",
                           -nyquistHz / 1e6, nyquistHz / 1e6);
     }

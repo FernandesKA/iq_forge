@@ -28,6 +28,8 @@ GeneratorConfig clampBasebandFrequencies(GeneratorConfig cfg) {
   cfg.chirpDeviationHz = std::clamp(cfg.chirpDeviationHz, -std::abs(cfg.sampleRateHz), std::abs(cfg.sampleRateHz));
   const double maxChipRateHz = std::abs(cfg.sampleRateHz);
   cfg.barkerChipRateHz = std::clamp(cfg.barkerChipRateHz, 0.0, maxChipRateHz);
+  cfg.pulsePeriodSec = cfg.pulsePeriodSec > 0.0 ? cfg.pulsePeriodSec : 1e-6;
+  cfg.pulseDurationSec = std::clamp(cfg.pulseDurationSec, 0.0, cfg.pulsePeriodSec);
   return cfg;
 }
 
@@ -87,9 +89,17 @@ size_t SignalGenerator::generate(Sample* out, size_t count) {
     case WaveformType::Tone: generateTone(out, count, cfg); break;
     case WaveformType::MultiTone: generateMultiTone(out, count, cfg); break;
     case WaveformType::Chirp: generateChirp(out, count, cfg); break;
+    case WaveformType::Pulse: generatePulse(out, count, cfg); break;
     case WaveformType::Barker: generateBarker(out, count, cfg); break;
     case WaveformType::Noise: generateNoise(out, count, cfg); break;
     case WaveformType::Ramp: generateRamp(out, count, cfg); break;
+  }
+
+  // Pulse always gates itself; any other waveform can opt into the same
+  // rectangular envelope to turn it into a pulsed signal (e.g. a pulsed
+  // chirp for radar-style testing).
+  if (cfg.type == WaveformType::Pulse || cfg.envelopeEnabled) {
+    applyEnvelope(out, count, cfg);
   }
   return count;
 }
@@ -137,6 +147,27 @@ void SignalGenerator::generateChirp(Sample* out, size_t count, const GeneratorCo
     t += dt;
   }
   chirpTime_ = std::fmod(t, duration);
+}
+
+void SignalGenerator::generatePulse(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  // The rectangular gating itself is applied uniformly afterwards by
+  // applyEnvelope(); the "fill" for a bare pulse is just a constant (real)
+  // carrier at 0 Hz baseband.
+  std::fill(out, out + count, Sample(cfg.amplitude, 0.0f));
+}
+
+void SignalGenerator::applyEnvelope(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  const double dt = 1.0 / cfg.sampleRateHz;
+  const double period = cfg.pulsePeriodSec > 0.0 ? cfg.pulsePeriodSec : 1e-6;
+  const double duration = std::clamp(cfg.pulseDurationSec, 0.0, period);
+
+  double t = envelopeTime_;
+  for (size_t i = 0; i < count; ++i) {
+    const double tMod = std::fmod(t, period);
+    if (tMod >= duration) out[i] = Sample(0.0f, 0.0f);
+    t += dt;
+  }
+  envelopeTime_ = std::fmod(t, period);
 }
 
 void SignalGenerator::generateBarker(Sample* out, size_t count, const GeneratorConfig& cfg) {

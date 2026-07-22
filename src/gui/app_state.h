@@ -51,6 +51,8 @@ struct AppState {
   FreqUnit chirpDeviationUnit = FreqUnit::kHz;
   TimeUnit chirpDurationUnit = TimeUnit::Ms;
   FreqUnit barkerChipRateUnit = FreqUnit::kHz;
+  TimeUnit pulseDurationUnit = TimeUnit::Us;
+  TimeUnit pulsePeriodUnit = TimeUnit::Us;
   char filePathBuffer[512] = "";
   bool fileLoop = true;
   std::string txError;

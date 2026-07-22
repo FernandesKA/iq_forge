@@ -245,4 +245,62 @@ void run_signal_generator_tests() {
     CHECK(freqStart > freqEnd);
     CHECK(std::abs(freqStart - 200e3) < 2000.0);
   }
+
+  // Pulse: a rectangular constant-amplitude carrier gated on for
+  // pulseDurationSec out of every pulsePeriodSec, then repeats.
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Pulse;
+    cfg.sampleRateHz = sampleRate; // 1e6 -> 1 sample = 1 us
+    cfg.pulseDurationSec = 10e-6;  // 10 samples on
+    cfg.pulsePeriodSec = 30e-6;    // 30 samples per cycle (10 on, 20 off)
+    cfg.amplitude = 1.0f;
+    SignalGenerator gen(cfg);
+
+    std::vector<Sample> buf(90); // 3 full periods
+    gen.generate(buf.data(), buf.size());
+
+    for (size_t cycle = 0; cycle < 3; ++cycle) {
+      size_t base = cycle * 30;
+      // Avoid the exact wrap boundary at relative index 0, where
+      // accumulated floating-point drift in the running time base can tip
+      // the comparison either way; index 3..7 is safely mid-window.
+      for (size_t i = 3; i < 8; ++i) {
+        CHECK(buf[base + i].real() == 1.0f);
+        CHECK(buf[base + i].imag() == 0.0f);
+      }
+      for (size_t i = 15; i < 25; ++i) {
+        CHECK(buf[base + i].real() == 0.0f);
+        CHECK(buf[base + i].imag() == 0.0f);
+      }
+    }
+  }
+
+  // Pulse envelope gates any other waveform type on/off using the same
+  // duration/period timing, e.g. turning a tone into a pulsed carrier.
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Tone;
+    cfg.sampleRateHz = sampleRate;
+    cfg.toneFreqHz = 100e3;
+    cfg.envelopeEnabled = true;
+    cfg.pulseDurationSec = 10e-6;
+    cfg.pulsePeriodSec = 30e-6;
+    cfg.amplitude = 1.0f;
+    SignalGenerator gen(cfg);
+
+    std::vector<Sample> buf(90);
+    gen.generate(buf.data(), buf.size());
+
+    for (size_t cycle = 0; cycle < 3; ++cycle) {
+      size_t base = cycle * 30;
+      for (size_t i = 3; i < 8; ++i) {
+        CHECK(std::abs(buf[base + i]) > 0.99f); // tone present during "on"
+      }
+      for (size_t i = 15; i < 25; ++i) {
+        CHECK(buf[base + i].real() == 0.0f);
+        CHECK(buf[base + i].imag() == 0.0f);
+      }
+    }
+  }
 }
