@@ -16,7 +16,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake pkg-config dpkg-dev wget \
             libglfw3-dev libgl1-mesa-dev \
-            libiio-dev libhackrf-dev libfftw3-dev
+            libiio-dev libhackrf-dev libfftw3-dev libfuse-dev
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF
