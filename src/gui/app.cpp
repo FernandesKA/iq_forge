@@ -16,6 +16,7 @@
 #include "plot_spectrum.h"
 #include "plot_time_domain.h"
 #include "plot_waterfall.h"
+#include "plot_zoom_controls.h"
 
 namespace iqforge {
 
@@ -88,6 +89,7 @@ bool App::init() {
   ImPlot::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  configurePlotWheelZoom();
 
   ImGui::StyleColorsDark();
 
