@@ -16,7 +16,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake pkg-config dpkg-dev wget \
             libglfw3-dev libgl1-mesa-dev \
-            libiio-dev libhackrf-dev libfftw3-dev libfuse-dev
+            libiio-dev libhackrf-dev libfftw3-dev
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF
@@ -43,12 +43,17 @@ jobs:
           [Desktop Entry]
           Name=iqforge
           Exec=iqforge
+          Icon=iqforge
           Type=Application
           Categories=Utility;
           EOF
+          cp appimage-root/usr/share/applications/iqforge.desktop appimage-root/iqforge.desktop
           mkdir -p appimage-root/usr/share/icons/hicolor/256x256/apps
+          echo "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAACAElEQVR42u3TQQ0AAAjEsPODNcQhkTcaaFIFS5bqgbciAQYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABMIAKGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAbAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAGUAEDgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwAFwLvZoTKif7U/wAAAAASUVORK5CYII=" | base64 -d > appimage-root/usr/share/icons/hicolor/256x256/apps/iqforge.png
+          cp appimage-root/usr/share/icons/hicolor/256x256/apps/iqforge.png appimage-root/iqforge.png
+          ln -s usr/bin/iqforge appimage-root/AppRun
           cp README.md appimage-root/usr/share/doc/iqforge/README
-          ./appimagetool-x86_64.AppImage appimage-root dist-appimage/iqforge.AppImage
+          ./appimagetool-x86_64.AppImage --appimage-extract-and-run appimage-root dist-appimage/iqforge.AppImage
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
