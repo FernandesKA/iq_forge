@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(iqforge LANGUAGES C CXX)
+project(iqforge VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,6 +32,7 @@ add_library(PkgConfig::LIBHACKRF INTERFACE IMPORTED)
 target_include_directories(PkgConfig::LIBHACKRF INTERFACE ${LIBHACKRF_INCLUDE_DIR})
 target_link_libraries(PkgConfig::LIBHACKRF INTERFACE ${LIBHACKRF_LIBRARY})
 
+include(GNUInstallDirs)
 include(FetchContent)
 
 FetchContent_Declare(
@@ -70,6 +71,28 @@ target_include_directories(implot PUBLIC ${implot_SOURCE_DIR})
 target_link_libraries(implot PUBLIC imgui)
 
 add_subdirectory(src)
+
+install(TARGETS iqforge
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(FILES README.md
+  DESTINATION ${CMAKE_INSTALL_DOCDIR}
+)
+
+set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_PACKAGE_VENDOR "iqforge")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SDR signal capture/transmit GUI")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/your-org/iqforge")
+set(CPACK_PACKAGE_CONTACT "Maintainer <maintainer@localhost>")
+set(CPACK_DEBIAN_PACKAGE_NAME "iqforge")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Maintainer <maintainer@localhost>")
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "SDR signal capture/transmit GUI")
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+
+include(CPack)
 
 if(IQFORGE_BUILD_TESTS)
   enable_testing()

@@ -34,3 +34,7 @@ add_executable(iqforge
   gui/plot_instfreq.cpp
 )
 target_link_libraries(iqforge PRIVATE iqforge_core implot imgui)
+
+install(TARGETS iqforge_core
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
