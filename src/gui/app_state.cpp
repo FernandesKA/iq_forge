@@ -1,6 +1,7 @@
 #include "app_state.h"
 
 #include <algorithm>
+#include <chrono>
 
 namespace iqforge {
 
@@ -12,8 +13,8 @@ void appendTrim(std::vector<Sample>& buf, const SampleBuffer& block, size_t maxL
   }
 }
 
-void pushWaterfallRow(std::deque<std::vector<float>>& rows, const std::vector<float>& row, int maxRows) {
-  rows.push_back(row);
+void pushWaterfallRow(std::deque<WaterfallRow>& rows, const std::vector<float>& row, int maxRows) {
+  rows.push_back(WaterfallRow{row, std::chrono::steady_clock::now()});
   while (static_cast<int>(rows.size()) > maxRows) rows.pop_front();
 }
 

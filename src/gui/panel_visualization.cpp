@@ -37,7 +37,7 @@ struct VisualizationTabState {
 
 void drawVisualizationWindow(const char* windowTitle, VisualizationTabState& tab,
                               const std::vector<Sample>& timeDomain, const std::vector<float>& spectrumDb,
-                              const std::deque<std::vector<float>>& waterfallRows, double sampleRateHz) {
+                              const std::deque<WaterfallRow>& waterfallRows, double sampleRateHz) {
   ImGui::Begin(windowTitle);
 
   ImGui::Checkbox("Spectrum", &tab.showSpectrum);

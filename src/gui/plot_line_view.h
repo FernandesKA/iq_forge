@@ -13,6 +13,9 @@ namespace iqforge {
 
 struct LineViewState {
   bool hadData = false;
+  // Sentinel so the very first frame with data always counts as "changed"
+  // below, triggering the initial fit.
+  size_t lastCount = static_cast<size_t>(-1);
   AxisZoomState zoom;
 };
 
@@ -88,6 +91,16 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
   bool hasData = count > 0;
   if (!hasData) view.hadData = false;
   if ((!view.hadData && hasData) || resetView) fitRequested = true;
+  // Keep re-fitting while `count` is still changing frame to frame -- e.g.
+  // right after TX/RX starts, while the trigger's window (or the raw
+  // rolling buffer, if the trigger is off) is still filling up from empty.
+  // Fitting just once, on the very first frame any data exists, could lock
+  // onto a tiny/incomplete initial batch (e.g. the first few samples of a
+  // sine that hasn't swung negative yet) and never widen from there. Once
+  // `count` stabilizes at its steady-state size, this stops firing and
+  // manual zoom/pan takes over as usual.
+  if (hasData && count != view.lastCount) fitRequested = true;
+  view.lastCount = count;
   if (resetView) cursor.active = false;
   view.hadData |= hasData;
 
