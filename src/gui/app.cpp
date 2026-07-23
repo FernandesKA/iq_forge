@@ -13,9 +13,7 @@
 #include "panel_device.h"
 #include "panel_rx.h"
 #include "panel_tx.h"
-#include "plot_spectrum.h"
-#include "plot_time_domain.h"
-#include "plot_waterfall.h"
+#include "panel_visualization.h"
 #include "plot_zoom_controls.h"
 
 namespace iqforge {
@@ -42,11 +40,10 @@ void buildDefaultLayout(ImGuiID dockspaceId) {
   ImGuiID leftMid = ImGui::DockBuilderSplitNode(left, ImGuiDir_Up, 0.5f, nullptr, &left);
 
   ImGui::DockBuilderDockWindow("Device", leftTop);
-  ImGui::DockBuilderDockWindow("TX", leftMid);
-  ImGui::DockBuilderDockWindow("RX", left);
-  ImGui::DockBuilderDockWindow("Time Domain", mainId);
-  ImGui::DockBuilderDockWindow("Spectrum", mainId);
-  ImGui::DockBuilderDockWindow("RX Waterfall", mainId);
+  ImGui::DockBuilderDockWindow("TX Control", leftMid);
+  ImGui::DockBuilderDockWindow("RX Control", left);
+  ImGui::DockBuilderDockWindow("TX", mainId);
+  ImGui::DockBuilderDockWindow("RX", mainId);
   ImGui::DockBuilderDockWindow("Log", bottom);
 
   ImGui::DockBuilderFinish(dockspaceId);
@@ -119,9 +116,8 @@ void App::run() {
     drawDevicePanel(state_);
     drawTxPanel(state_);
     drawRxPanel(state_);
-    drawTimeDomainPanel(state_);
-    drawSpectrumPanel(state_);
-    drawWaterfallPanel(state_);
+    drawTxVisualizationPanel(state_);
+    drawRxVisualizationPanel(state_);
     drawLogPanel(state_);
 
     ImGui::Render();

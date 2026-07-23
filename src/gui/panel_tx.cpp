@@ -58,7 +58,7 @@ bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
 }
 
 void drawTxPanel(AppState& state) {
-  ImGui::Begin("TX");
+  ImGui::Begin("TX Control");
 
   bool connected = state.deviceManager.isConnected();
   bool active = state.isTxActive();

@@ -60,6 +60,7 @@ struct AppState {
   std::vector<Sample> txTimeDomain;
   std::vector<float> txSpectrumDb;
   FftProcessor txFft{SpectrumConfig{2048, WindowType::Hann, 0.3f}};
+  std::deque<std::vector<float>> txWaterfallRows;
 
   bool isTxActive() const {
     return deviceManager.device() && deviceManager.device()->isTxRunning();
@@ -71,7 +72,7 @@ struct AppState {
   std::vector<Sample> rxTimeDomain;
   std::vector<float> rxSpectrumDb;
   FftProcessor rxFft{SpectrumConfig{2048, WindowType::Hann, 0.3f}};
-  std::deque<std::vector<float>> waterfallRows;
+  std::deque<std::vector<float>> rxWaterfallRows;
 
   bool rxRecording = false;
   char rxRecordPathBuffer[512] = "recording.cf32";

@@ -26,8 +26,11 @@ add_executable(iqforge
   gui/panel_device.cpp
   gui/panel_tx.cpp
   gui/panel_rx.cpp
+  gui/panel_visualization.cpp
   gui/plot_time_domain.cpp
   gui/plot_spectrum.cpp
   gui/plot_waterfall.cpp
+  gui/plot_phase.cpp
+  gui/plot_instfreq.cpp
 )
 target_link_libraries(iqforge PRIVATE iqforge_core implot imgui)

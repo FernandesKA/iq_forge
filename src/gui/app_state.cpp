@@ -42,7 +42,7 @@ void AppState::updateDisplays() {
       rxRecordBuffer.insert(rxRecordBuffer.end(), block.begin(), block.end());
     }
   }
-  if (gotRx) pushWaterfallRow(waterfallRows, rxSpectrumDb, kWaterfallMaxRows);
+  if (gotRx) pushWaterfallRow(rxWaterfallRows, rxSpectrumDb, kWaterfallMaxRows);
 
   bool gotTx = false;
   while (txPreviewRing.tryPop(block)) {
@@ -50,7 +50,7 @@ void AppState::updateDisplays() {
     appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
     processSpectrum(txFft, block, txSpectrumDb);
   }
-  (void)gotTx;
+  if (gotTx) pushWaterfallRow(txWaterfallRows, txSpectrumDb, kWaterfallMaxRows);
 }
 
 } // namespace iqforge

@@ -5,7 +5,7 @@
 namespace iqforge {
 
 void drawRxPanel(AppState& state) {
-  ImGui::Begin("RX");
+  ImGui::Begin("RX Control");
 
   bool connected = state.deviceManager.isConnected();
   bool active = state.isRxActive();

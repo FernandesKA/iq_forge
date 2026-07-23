@@ -5,48 +5,41 @@
 
 #include <algorithm>
 
-#include "plot_zoom_controls.h"
-
 namespace iqforge {
 
-void drawWaterfallPanel(AppState& state) {
-  static AxisZoomState zoom;
+void plotWaterfall(const char* plotId, const std::deque<std::vector<float>>& rows, AxisZoomState& zoom) {
+  int numRows = static_cast<int>(rows.size());
+  int cols = numRows > 0 ? static_cast<int>(rows.front().size()) : 0;
 
-  ImGui::Begin("RX Waterfall");
-  ImGui::TextDisabled("Wheel: zoom X, Shift+wheel: zoom Y, drag: pan, double-click: fit");
-
-  int rows = static_cast<int>(state.waterfallRows.size());
-  int cols = rows > 0 ? static_cast<int>(state.waterfallRows.front().size()) : 0;
-
-  if (rows > 0 && cols > 0) {
-    static std::vector<float> flat;
-    flat.resize(static_cast<size_t>(rows) * cols);
-    // Newest row on top: waterfallRows.back() is most recent.
-    for (int r = 0; r < rows; ++r) {
-      const auto& src = state.waterfallRows[static_cast<size_t>(rows - 1 - r)];
-      std::copy(src.begin(), src.end(), flat.begin() + static_cast<long>(r) * cols);
-    }
-
-    if (ImPlot::BeginPlot("##waterfall", ImVec2(-1, 300), ImPlotFlags_NoLegend)) {
-      ImPlot::SetupAxes("Frequency bin", "History (newest at top)", ImPlotAxisFlags_NoTickLabels,
-                         ImPlotAxisFlags_NoTickLabels);
-      // The heatmap is drawn over the default [0,1]x[0,1] bounds (no custom
-      // bounds_min/bounds_max passed below); stop panning/zooming past that.
-      constrainAxisToData(ImAxis_X1, 0.0, 1.0, 0.0);
-      constrainAxisToData(ImAxis_Y1, 0.0, 1.0, 0.0);
-      applyAxisZoom(consumeWheelZoomRequest(zoom), zoom);
-      ImPlot::PushColormap(ImPlotColormap_Viridis);
-      ImPlot::PlotHeatmap("waterfall", flat.data(), rows, cols, -100.0, 0.0, nullptr);
-      ImPlot::PopColormap();
-      captureWheelZoomRequest(zoom);
-      captureAxisZoomState(zoom);
-      ImPlot::EndPlot();
-    }
-  } else {
-    ImGui::TextDisabled("Waiting for RX data...");
+  if (numRows <= 0 || cols <= 0) {
+    ImGui::TextDisabled("Waiting for data...");
+    return;
   }
 
-  ImGui::End();
+  static std::vector<float> flat;
+  flat.resize(static_cast<size_t>(numRows) * cols);
+  // Newest row on top: rows.back() is most recent.
+  for (int r = 0; r < numRows; ++r) {
+    const auto& src = rows[static_cast<size_t>(numRows - 1 - r)];
+    std::copy(src.begin(), src.end(), flat.begin() + static_cast<long>(r) * cols);
+  }
+
+  ImGui::TextDisabled("Wheel: zoom X, Shift+wheel: zoom Y, drag: pan, double-click: fit");
+  if (ImPlot::BeginPlot(plotId, ImVec2(-1, 220), ImPlotFlags_NoLegend)) {
+    ImPlot::SetupAxes("Frequency bin", "History (newest at top)", ImPlotAxisFlags_NoTickLabels,
+                       ImPlotAxisFlags_NoTickLabels);
+    // The heatmap is drawn over the default [0,1]x[0,1] bounds (no custom
+    // bounds_min/bounds_max passed below); stop panning/zooming past that.
+    constrainAxisToData(ImAxis_X1, 0.0, 1.0, 0.0);
+    constrainAxisToData(ImAxis_Y1, 0.0, 1.0, 0.0);
+    applyAxisZoom(consumeWheelZoomRequest(zoom), zoom);
+    ImPlot::PushColormap(ImPlotColormap_Viridis);
+    ImPlot::PlotHeatmap(plotId, flat.data(), numRows, cols, -100.0, 0.0, nullptr);
+    ImPlot::PopColormap();
+    captureWheelZoomRequest(zoom);
+    captureAxisZoomState(zoom);
+    ImPlot::EndPlot();
+  }
 }
 
 } // namespace iqforge
