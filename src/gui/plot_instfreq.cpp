@@ -20,7 +20,7 @@ double wrapToPi(double phase) {
 } // namespace
 
 void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, double sampleRateHz,
-                      InstFreqViewState& view, bool resetView) {
+                      InstFreqViewState& view, bool resetView, SharedXAxisLink& xLink, SampleCursorState& cursor) {
   size_t n = count > 1 ? count - 1 : 0;
 
   // Reused scratch buffer -- see plot_phase.cpp for why this is safe.
@@ -34,13 +34,23 @@ void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, doub
   }
 
   drawLineView(
-      plotId, "Frequency (Hz)", n, resetView, view,
+      plotId, "Frequency (Hz)", n, resetView, view, xLink, cursor,
       [&](double& lo, double& hi) {
         auto [minIt, maxIt] = std::minmax_element(freq.begin(), freq.end());
         lo = *minIt;
         hi = *maxIt;
       },
-      [&]() { ImPlot::PlotLine("Inst. freq", freq.data(), static_cast<int>(n)); });
+      [&]() {
+        ImPlot::PlotLine("Inst. freq", freq.data(), static_cast<int>(n));
+
+        if (cursor.active && static_cast<size_t>(cursor.index) < n) {
+          double cx = static_cast<double>(cursor.index);
+          double cy = freq[cursor.index];
+          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
+          ImPlot::PlotScatter("##cursor_freq", &cx, &cy, 1);
+          ImPlot::Annotation(cx, cy, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "Freq=%.4g Hz", cy);
+        }
+      });
 }
 
 } // namespace iqforge

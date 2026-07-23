@@ -12,8 +12,11 @@ using InstFreqViewState = LineViewState;
 // Draws the instantaneous frequency (the phase derivative between
 // consecutive samples, converted to Hz via sampleRateHz) of an
 // already-computed sample window (see plot_trigger.h). Produces count-1
-// points, one per sample-to-sample transition.
+// points, one per sample-to-sample transition. `xLink` and `cursor` are
+// shared with the I/Q and phase views over the same window so zoom and
+// point-selection stay in sync between them; a cursor selection that lands
+// on the last (missing) sample is simply not drawn here.
 void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, double sampleRateHz,
-                      InstFreqViewState& view, bool resetView);
+                      InstFreqViewState& view, bool resetView, SharedXAxisLink& xLink, SampleCursorState& cursor);
 
 } // namespace iqforge

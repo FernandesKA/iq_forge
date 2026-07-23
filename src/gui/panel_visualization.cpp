@@ -23,11 +23,16 @@ struct VisualizationTabState {
   AxisZoomState waterfallZoom;
   // I/Q, Phase, and Instantaneous Frequency all derive from the same
   // triggered sample window, so they share one trigger (and one set of
-  // trigger controls) instead of each independently re-deriving it.
+  // trigger controls) instead of each independently re-deriving it. They
+  // also share one X-axis zoom/pan link and one sample-selection cursor, so
+  // zooming or Ctrl+clicking a sample in any one of them is reflected in
+  // the other two.
   TriggerState trigger;
   TimeDomainViewState iqView;
   PhaseViewState phaseView;
   InstFreqViewState instFreqView;
+  SharedXAxisLink timeDomainXLink;
+  SampleCursorState timeDomainCursor;
 };
 
 void drawVisualizationWindow(const char* windowTitle, VisualizationTabState& tab,
@@ -69,23 +74,33 @@ void drawVisualizationWindow(const char* windowTitle, VisualizationTabState& tab
     bool resetFromTrigger = drawTriggerControls(tab.trigger);
     auto [triggeredData, triggeredCount] = applyTrigger(timeDomain, tab.trigger);
 
+    if (tab.timeDomainCursor.active) {
+      ImGui::Text("Cursor: sample %d", tab.timeDomainCursor.index);
+      ImGui::SameLine();
+      if (ImGui::Button("Clear cursor")) tab.timeDomainCursor.active = false;
+    } else {
+      ImGui::TextDisabled("Ctrl+click a plot below to select a sample");
+    }
+
     if (tab.showIQ) {
       ImGui::Text("I/Q");
       ImGui::PushID("iq");
-      plotIQLines("##iq", triggeredData, triggeredCount, tab.iqView, resetFromTrigger);
+      plotIQLines("##iq", triggeredData, triggeredCount, tab.iqView, resetFromTrigger, tab.timeDomainXLink,
+                  tab.timeDomainCursor);
       ImGui::PopID();
     }
     if (tab.showPhase) {
       ImGui::Text("Phase");
       ImGui::PushID("phase");
-      plotPhaseLine("##phase", triggeredData, triggeredCount, tab.phaseView, resetFromTrigger);
+      plotPhaseLine("##phase", triggeredData, triggeredCount, tab.phaseView, resetFromTrigger, tab.timeDomainXLink,
+                    tab.timeDomainCursor);
       ImGui::PopID();
     }
     if (tab.showInstFreq) {
       ImGui::Text("Instantaneous frequency");
       ImGui::PushID("instfreq");
-      plotInstFreqLine("##instfreq", triggeredData, triggeredCount, sampleRateHz, tab.instFreqView,
-                        resetFromTrigger);
+      plotInstFreqLine("##instfreq", triggeredData, triggeredCount, sampleRateHz, tab.instFreqView, resetFromTrigger,
+                        tab.timeDomainXLink, tab.timeDomainCursor);
       ImGui::PopID();
     }
     ImGui::PopID();
