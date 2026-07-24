@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 namespace iqforge {
@@ -20,7 +21,7 @@ double wrapToPi(double phase) {
 } // namespace
 
 void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, double sampleRateHz,
-                      InstFreqViewState& view, bool resetView, SharedXAxisLink& xLink, SampleCursorState& cursor) {
+                      InstFreqViewState& view, bool resetView, SharedXAxisLink& xLink, TimeMarkerState& markers) {
   size_t n = count > 1 ? count - 1 : 0;
 
   // Reused scratch buffer -- see plot_phase.cpp for why this is safe.
@@ -34,7 +35,7 @@ void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, doub
   }
 
   drawLineView(
-      plotId, "Frequency (Hz)", n, resetView, view, xLink, cursor,
+      plotId, "Frequency (Hz)", n, resetView, view, xLink, markers,
       [&](double& lo, double& hi) {
         auto [minIt, maxIt] = std::minmax_element(freq.begin(), freq.end());
         lo = *minIt;
@@ -43,14 +44,17 @@ void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, doub
       [&]() {
         ImPlot::PlotLine("Inst. freq", freq.data(), static_cast<int>(n));
 
-        for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
-          if (!cursor.active[slot] || static_cast<size_t>(cursor.index[slot]) >= n) continue;
-          char tag = slot == 0 ? 'A' : 'B';
-          double cx = static_cast<double>(cursor.index[slot]);
-          double cy = freq[cursor.index[slot]];
-          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
-          ImPlot::PlotScatter(slot == 0 ? "##cursor_freq_a" : "##cursor_freq_b", &cx, &cy, 1);
-          ImPlot::Annotation(cx, cy, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "%c Freq=%.4g Hz", tag, cy);
+        for (int i = 0; i < kMaxTimeMarkers; ++i) {
+          const TimeMarker& m = markers.markers[i];
+          if (!m.active || static_cast<size_t>(m.index) >= n) continue;
+          const ImVec4& col = timeMarkerColor(i);
+          double cx = static_cast<double>(m.index);
+          double cy = freq[m.index];
+          char id[24];
+          std::snprintf(id, sizeof id, "##marker_freq_%d", i);
+          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, col, 1.5f, col);
+          ImPlot::PlotScatter(id, &cx, &cy, 1);
+          ImPlot::Annotation(cx, cy, col, ImVec2(10, -10), true, "M%d Freq=%.4g Hz", i + 1, cy);
         }
       });
 }

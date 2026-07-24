@@ -8,6 +8,41 @@
 
 namespace iqforge {
 
+// Call right after drawing a widget to decide whether the *next* one
+// (estimated width `nextWidth`, see wrapButtonWidth() below) should
+// continue on the same line or wrap to a new one. Standard ImGui manual-
+// wrapping idiom (see imgui_demo.cpp's "Wrapping" section) -- without it, a
+// long SameLine() chain of buttons just overflows silently past the window
+// edge on a narrower window/dock instead of reflowing.
+inline void sameLineOrWrap(float nextWidth) {
+  ImGuiStyle& style = ImGui::GetStyle();
+  float windowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+  float nextX2 = ImGui::GetItemRectMax().x + style.ItemSpacing.x + nextWidth;
+  if (nextX2 < windowVisibleX2) ImGui::SameLine();
+}
+
+// Estimated on-screen width of a Button() with this label, for feeding into
+// sameLineOrWrap() before the button itself is drawn.
+inline float wrapButtonWidth(const char* label) {
+  return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+// Compact "(?)" affordance that reveals `desc` in a tooltip on hover --
+// same idiom as imgui_demo.cpp's HelpMarker(). Used to surface
+// modifier-key controls (Ctrl+click, etc.) that don't fit comfortably as
+// always-visible text without either cluttering the row or being easy to
+// miss.
+inline void HelpMarker(const char* desc) {
+  ImGui::TextDisabled("(?)");
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+    ImGui::BeginTooltip();
+    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+    ImGui::TextUnformatted(desc);
+    ImGui::PopTextWrapPos();
+    ImGui::EndTooltip();
+  }
+}
+
 struct AxisZoomRequest {
   bool zoomInX = false;
   bool zoomOutX = false;

@@ -7,8 +7,6 @@
 #include <complex>
 #include <cstdio>
 
-#include "plot_format.h"
-
 namespace iqforge {
 
 namespace {
@@ -24,6 +22,23 @@ double binToFreq(int bin, double sampleRateHz, int n) {
 // swing wide.
 constexpr float kClipThreshold = 0.999f;
 
+struct FixedFreqUnit {
+  double scale;
+  const char* suffix;
+};
+
+// One unit for the whole table (picked from the Nyquist span, since every
+// frequency-domain row is bounded by it), instead of formatHz() picking a
+// unit per value -- otherwise "Peak freq" and "Occupied BW" could land in
+// different units and be impossible to compare at a glance.
+FixedFreqUnit pickFixedFreqUnit(double sampleRateHz) {
+  double nyquist = std::abs(sampleRateHz) * 0.5;
+  if (nyquist >= 1e9) return {1e9, "GHz"};
+  if (nyquist >= 1e6) return {1e6, "MHz"};
+  if (nyquist >= 1e3) return {1e3, "kHz"};
+  return {1.0, "Hz"};
+}
+
 } // namespace
 
 SpectrumMeasurements computeMeasurements(const std::vector<float>& db, double sampleRateHz,
@@ -32,6 +47,7 @@ SpectrumMeasurements computeMeasurements(const std::vector<float>& db, double sa
   int n = static_cast<int>(db.size());
   if (n == 0) return m;
   m.valid = true;
+  m.sampleRateHz = sampleRateHz;
 
   int peakBin = static_cast<int>(std::max_element(db.begin(), db.end()) - db.begin());
   m.peakFreqHz = binToFreq(peakBin, sampleRateHz, n);
@@ -130,17 +146,22 @@ void drawMeasurementsTable(const SpectrumMeasurements& m) {
     ImGui::TextUnformatted(value);
   };
   char buf[32];
+  FixedFreqUnit unit = pickFixedFreqUnit(m.sampleRateHz);
+  auto freqRow = [&](const char* label, double hz) {
+    std::snprintf(buf, sizeof buf, "%.3f %s", hz / unit.scale, unit.suffix);
+    row(label, buf);
+  };
 
-  row("Peak freq", formatHz(m.peakFreqHz).c_str());
+  freqRow("Peak freq", m.peakFreqHz);
   std::snprintf(buf, sizeof buf, "%.1f dBFS", m.peakLevelDbFs);
   row("Peak level", buf);
   std::snprintf(buf, sizeof buf, "%.1f dBFS", m.noiseFloorDbFs);
   row("Noise floor", buf);
   std::snprintf(buf, sizeof buf, "%.1f dB", m.snrDb);
   row("SNR", buf);
-  row("Occupied BW", formatHz(m.occupiedBwHz).c_str());
-  row("-3 dB BW", formatHz(m.bw3dBHz).c_str());
-  row("-6 dB BW", formatHz(m.bw6dBHz).c_str());
+  freqRow("Occupied BW", m.occupiedBwHz);
+  freqRow("-3 dB BW", m.bw3dBHz);
+  freqRow("-6 dB BW", m.bw6dBHz);
   std::snprintf(buf, sizeof buf, "%.1f dBFS", m.channelPowerDbFs);
   row("Channel power", buf);
 

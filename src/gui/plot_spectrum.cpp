@@ -138,16 +138,17 @@ void updateMarkerPlacement(SpectrumViewState& view, const std::vector<float>& db
 
 void drawMarkerControls(SpectrumViewState& view, const std::vector<float>& db, double sampleRateHz,
                          double centerFreqHz) {
-  if (!ImGui::TreeNodeEx("Markers (Ctrl+click to place)", ImGuiTreeNodeFlags_DefaultOpen)) return;
+  if (!ImGui::TreeNodeEx("Markers (Ctrl+click to place)")) return;
 
   for (int i = 0; i < kMaxSpectrumMarkers; ++i) {
-    if (i > 0) ImGui::SameLine();
     char label[24];
     std::snprintf(label, sizeof label, "M%d%s", i + 1, view.markers[i].active ? "" : " (off)");
     bool isSel = (view.selectedMarker == i);
     if (isSel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-    if (ImGui::Button(label)) view.selectedMarker = i;
+    bool clicked = ImGui::Button(label);
     if (isSel) ImGui::PopStyleColor();
+    if (clicked) view.selectedMarker = i;
+    if (i + 1 < kMaxSpectrumMarkers) sameLineOrWrap(wrapButtonWidth("M4 (off)"));
   }
 
   SpectrumMarker& sel = view.markers[view.selectedMarker];
@@ -161,7 +162,7 @@ void drawMarkerControls(SpectrumViewState& view, const std::vector<float>& db, d
       sel.binIndex = view.peakOrder[0];
     }
   }
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Next peak"));
   ImGui::BeginDisabled(view.peakOrder.empty());
   if (ImGui::Button("Next peak")) {
     view.peakOrderPos = std::min(view.peakOrderPos + 1, view.peakOrder.size() - 1);
@@ -169,7 +170,7 @@ void drawMarkerControls(SpectrumViewState& view, const std::vector<float>& db, d
     sel.binIndex = view.peakOrder[view.peakOrderPos];
   }
   ImGui::EndDisabled();
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("-> Center freq"));
   ImGui::BeginDisabled(!sel.active);
   if (ImGui::Button("-> Center freq")) {
     view.requestedCenterFreqHz = centerFreqHz + binToFreq(sel.binIndex, sampleRateHz, static_cast<int>(db.size()));
@@ -177,7 +178,7 @@ void drawMarkerControls(SpectrumViewState& view, const std::vector<float>& db, d
   }
   ImGui::EndDisabled();
   ImGui::EndDisabled();
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Clear"));
   if (ImGui::Button("Clear")) sel = SpectrumMarker{};
 
   char preview[8];
@@ -216,7 +217,7 @@ void drawMarkerControls(SpectrumViewState& view, const std::vector<float>& db, d
 }
 
 void drawBandMarkerControls(SpectrumViewState& view, const std::vector<float>& db, double sampleRateHz) {
-  if (!ImGui::TreeNodeEx("Band marker", ImGuiTreeNodeFlags_DefaultOpen)) return;
+  if (!ImGui::TreeNodeEx("Band marker")) return;
 
   ImGui::Checkbox("Enabled", &view.bandEnabled);
   if (view.bandEnabled && !view.bandInit) {
@@ -227,10 +228,12 @@ void drawBandMarkerControls(SpectrumViewState& view, const std::vector<float>& d
   if (view.bandEnabled) {
     double lo = -sampleRateHz / 2.0, hi = sampleRateHz / 2.0;
     double step = std::max(1.0, sampleRateHz * 0.001);
-    ImGui::SameLine();
+    // ~130px input frame plus its trailing "Lo (Hz)"/"Hi (Hz)" label.
+    constexpr float kDragFieldWidth = 210.0f;
+    sameLineOrWrap(kDragFieldWidth);
     ImGui::SetNextItemWidth(130.0f);
     ImGui::DragScalar("Lo (Hz)", ImGuiDataType_Double, &view.bandLoHz, static_cast<float>(step), &lo, &hi, "%.0f");
-    ImGui::SameLine();
+    sameLineOrWrap(kDragFieldWidth);
     ImGui::SetNextItemWidth(130.0f);
     ImGui::DragScalar("Hi (Hz)", ImGuiDataType_Double, &view.bandHiHz, static_cast<float>(step), &lo, &hi, "%.0f");
 
@@ -255,7 +258,7 @@ void drawTraceControls(SpectrumViewState& view) {
     view.holdInit = false;
     view.holdDb.clear();
   }
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Reset hold"));
   ImGui::BeginDisabled(view.traceMode == SpectrumTraceMode::Live);
   if (ImGui::Button("Reset hold")) {
     view.holdInit = false;
@@ -268,7 +271,7 @@ void drawTraceControls(SpectrumViewState& view) {
     view.peakHoldInit = false;
     view.peakHoldDb.clear();
   }
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Clear peak hold"));
   ImGui::BeginDisabled(!view.peakHoldEnabled);
   if (ImGui::Button("Clear peak hold")) {
     view.peakHoldInit = false;
@@ -277,7 +280,7 @@ void drawTraceControls(SpectrumViewState& view) {
   ImGui::EndDisabled();
 
   ImGui::Checkbox("Persistence", &view.persistenceEnabled);
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Clear persistence"));
   ImGui::BeginDisabled(view.persistenceFrames.empty());
   if (ImGui::Button("Clear persistence")) view.persistenceFrames.clear();
   ImGui::EndDisabled();
@@ -392,12 +395,7 @@ void drawBandOnPlot(SpectrumViewState& view, double sampleRateHz) {
 
 void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampleRateHz, double centerFreqHz,
                    const std::vector<Sample>& timeDomain, SpectrumViewState& view) {
-  bool fitRequested = ImGui::Button("Fit signal");
-  ImGui::SameLine();
-  AxisZoomRequest zoomReq = drawAxisZoomButtons(view.zoom.valid && !db.empty());
-  mergeZoomRequest(zoomReq, consumeWheelZoomRequest(view.zoom));
-  ImGui::SameLine();
-  ImGui::TextDisabled("Wheel: zoom X, Shift+wheel: zoom Y, drag: pan, double-click: fit, H/V: zoom one axis");
+  bool fitRequested = false;
 
   if (db.empty()) view.hadData = false;
   const bool scaleChanged = view.sampleRateHz != sampleRateHz;
@@ -416,10 +414,28 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
     view.lastSeenDb.clear();
   }
 
+  // Marker/band/trace controls come first, then the zoom row, then the
+  // plot itself -- so the controls that shape what the plot shows are read
+  // top-to-bottom before the plot rather than sandwiched below the zoom row.
   drawMarkerControls(view, db, sampleRateHz, centerFreqHz);
   drawBandMarkerControls(view, db, sampleRateHz);
   drawTraceControls(view);
   updateAccumulators(view, db);
+
+  fitRequested |= ImGui::Button("Fit signal");
+  ImGui::SameLine();
+  AxisZoomRequest zoomReq = drawAxisZoomButtons(view.zoom.valid && !db.empty());
+  mergeZoomRequest(zoomReq, consumeWheelZoomRequest(view.zoom));
+  ImGui::SameLine();
+  ImGui::TextDisabled("Ctrl+click: place marker");
+  ImGui::SameLine();
+  HelpMarker(
+      "Wheel -- zoom X\n"
+      "Shift+wheel -- zoom Y\n"
+      "Drag -- pan\n"
+      "Double-click -- fit\n"
+      "H+/H-/V+/V- -- zoom one axis\n"
+      "Ctrl+click on the plot -- place the selected marker (M1..M4)");
 
   SpectrumMeasurements measurements = computeMeasurements(db, sampleRateHz, timeDomain);
   constexpr float kMeasurementsWidth = 230.0f;

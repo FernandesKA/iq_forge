@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <cmath>
+#include <cstdio>
 
 #include "plot_format.h"
 #include "plot_instfreq.h"
@@ -11,6 +12,7 @@
 #include "plot_time_domain.h"
 #include "plot_trigger.h"
 #include "plot_waterfall.h"
+#include "plot_zoom_controls.h"
 
 namespace iqforge {
 
@@ -35,7 +37,7 @@ struct VisualizationTabState {
   PhaseViewState phaseView;
   InstFreqViewState instFreqView;
   SharedXAxisLink timeDomainXLink;
-  SampleCursorState timeDomainCursor;
+  TimeMarkerState timeDomainMarkers;
 };
 
 // Reported back to the caller (which owns AppState/the device) when a
@@ -46,32 +48,68 @@ struct VisualizationRequest {
   double retuneToHz = 0.0;
 };
 
-void drawCursorReadout(SampleCursorState& cursor, const Sample* data, size_t count, double sampleRateHz) {
-  bool any = cursor.active[0] || cursor.active[1];
-  for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
-    if (!cursor.active[slot]) continue;
-    ImGui::Text("Cursor %c: sample %d", slot == 0 ? 'A' : 'B', cursor.index[slot]);
-    ImGui::SameLine();
-    ImGui::PushID(slot);
-    if (ImGui::Button("Clear")) cursor.active[slot] = false;
-    ImGui::PopID();
-  }
-  if (!any) {
-    ImGui::TextDisabled("Ctrl+click: cursor A, Ctrl+Shift+click: cursor B (on any plot below)");
-    return;
+// Marker controls for the I/Q/phase/inst.-freq family, mirroring
+// drawMarkerControls() in plot_spectrum.cpp: M1..M4 selection, Clear, and a
+// Delta-ref combo -- except the delta readout here is dt/1-over-dt/
+// dAmplitude between the selected marker and its reference, generalizing
+// the old fixed cursor-A/cursor-B period measurement to any pair of markers.
+void drawTimeMarkerControls(TimeMarkerState& state, const Sample* data, size_t count, double sampleRateHz) {
+  for (int i = 0; i < kMaxTimeMarkers; ++i) {
+    char label[16];
+    std::snprintf(label, sizeof label, "M%d%s", i + 1, state.markers[i].active ? "" : " (off)");
+    bool isSel = (state.selectedMarker == i);
+    if (isSel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    bool clicked = ImGui::Button(label);
+    if (isSel) ImGui::PopStyleColor();
+    if (clicked) state.selectedMarker = i;
+    if (i + 1 < kMaxTimeMarkers) sameLineOrWrap(wrapButtonWidth("M4 (off)"));
   }
 
-  bool bothInRange = cursor.active[0] && cursor.active[1] && static_cast<size_t>(cursor.index[0]) < count &&
-                      static_cast<size_t>(cursor.index[1]) < count;
-  if (bothInRange && sampleRateHz > 0.0) {
-    int ia = cursor.index[0], ib = cursor.index[1];
-    double dtSamples = std::abs(ib - ia);
-    double dt = dtSamples / sampleRateHz;
-    double freq = dt > 0.0 ? 1.0 / dt : 0.0;
-    float ampA = std::abs(data[ia]);
-    float ampB = std::abs(data[ib]);
-    ImGui::Text("dt (period): %s   1/dt (freq): %s   dAmplitude: %.4g", formatSeconds(dt).c_str(),
-                formatHz(freq).c_str(), ampB - ampA);
+  TimeMarker& sel = state.markers[state.selectedMarker];
+  sameLineOrWrap(wrapButtonWidth("Clear"));
+  if (ImGui::Button("Clear")) sel = TimeMarker{};
+
+  char preview[8];
+  std::snprintf(preview, sizeof preview, sel.deltaRef < 0 ? "Off" : "M%d", sel.deltaRef + 1);
+  ImGui::SetNextItemWidth(90.0f);
+  if (ImGui::BeginCombo("Delta ref", preview)) {
+    if (ImGui::Selectable("Off", sel.deltaRef < 0)) sel.deltaRef = -1;
+    for (int j = 0; j < kMaxTimeMarkers; ++j) {
+      if (j == state.selectedMarker) continue;
+      char item[8];
+      std::snprintf(item, sizeof item, "M%d", j + 1);
+      if (ImGui::Selectable(item, sel.deltaRef == j)) sel.deltaRef = j;
+    }
+    ImGui::EndCombo();
+  }
+
+  bool anyActive = false;
+  for (int i = 0; i < kMaxTimeMarkers; ++i) {
+    const TimeMarker& m = state.markers[i];
+    if (!m.active || data == nullptr || static_cast<size_t>(m.index) >= count) continue;
+    anyActive = true;
+    Sample s = data[m.index];
+    float mag = std::abs(s);
+    double t = sampleRateHz > 0.0 ? static_cast<double>(m.index) / sampleRateHz : 0.0;
+    ImGui::TextColored(timeMarkerColor(i), "M%d:", i + 1);
+    ImGui::SameLine();
+    ImGui::Text("sample %d (%s)   I=%.4g Q=%.4g |A|=%.4g", m.index, formatSeconds(t).c_str(), s.real(), s.imag(),
+                mag);
+
+    if (m.deltaRef >= 0 && m.deltaRef < kMaxTimeMarkers && state.markers[m.deltaRef].active) {
+      const TimeMarker& r = state.markers[m.deltaRef];
+      if (static_cast<size_t>(r.index) < count && sampleRateHz > 0.0) {
+        double dt = std::abs(m.index - r.index) / sampleRateHz;
+        double freq = dt > 0.0 ? 1.0 / dt : 0.0;
+        float dAmp = mag - std::abs(data[r.index]);
+        ImGui::SameLine();
+        ImGui::TextDisabled("(delta vs M%d: dt=%s, 1/dt=%s, dAmplitude=%.4g)", m.deltaRef + 1,
+                             formatSeconds(dt).c_str(), formatHz(freq).c_str(), dAmp);
+      }
+    }
+  }
+  if (!anyActive) {
+    ImGui::TextDisabled("Ctrl+click a plot below to place the selected marker (M1..M4)");
   }
 }
 
@@ -122,27 +160,27 @@ VisualizationRequest drawVisualizationWindow(const char* windowTitle, Visualizat
     bool resetFromTrigger = drawTriggerControls(tab.trigger);
     auto [triggeredData, triggeredCount] = applyTrigger(timeDomain, tab.trigger);
 
-    drawCursorReadout(tab.timeDomainCursor, triggeredData, triggeredCount, sampleRateHz);
+    drawTimeMarkerControls(tab.timeDomainMarkers, triggeredData, triggeredCount, sampleRateHz);
 
     if (tab.showIQ) {
       ImGui::Text("I/Q");
       ImGui::PushID("iq");
       plotIQLines("##iq", triggeredData, triggeredCount, tab.iqView, resetFromTrigger, tab.timeDomainXLink,
-                  tab.timeDomainCursor, tab.trigger);
+                  tab.timeDomainMarkers, tab.trigger);
       ImGui::PopID();
     }
     if (tab.showPhase) {
       ImGui::Text("Phase");
       ImGui::PushID("phase");
       plotPhaseLine("##phase", triggeredData, triggeredCount, tab.phaseView, resetFromTrigger, tab.timeDomainXLink,
-                    tab.timeDomainCursor);
+                    tab.timeDomainMarkers);
       ImGui::PopID();
     }
     if (tab.showInstFreq) {
       ImGui::Text("Instantaneous frequency");
       ImGui::PushID("instfreq");
       plotInstFreqLine("##instfreq", triggeredData, triggeredCount, sampleRateHz, tab.instFreqView, resetFromTrigger,
-                        tab.timeDomainXLink, tab.timeDomainCursor);
+                        tab.timeDomainXLink, tab.timeDomainMarkers);
       ImGui::PopID();
     }
     ImGui::PopID();

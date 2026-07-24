@@ -37,7 +37,7 @@ struct GeneratorConfig {
   double sampleRateHz = 1e6;
 
   // Tone
-  double toneFreqHz = 100e3;
+  double toneFreqHz = 0.0;
 
   // MultiTone
   std::vector<double> multiToneFreqsHz = {50e3, 150e3, 300e3};

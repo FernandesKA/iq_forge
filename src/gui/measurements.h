@@ -14,6 +14,11 @@ struct SpectrumMeasurements {
   bool valid = false;      // false if there's no spectrum data yet
   bool hasTimeStats = false; // false if there's no time-domain data yet
 
+  // Kept only so drawMeasurementsTable() can pick one fixed frequency unit
+  // for the whole table (Nyquist-scaled) instead of each row auto-scaling
+  // its own unit independently, which made rows hard to compare at a glance.
+  double sampleRateHz = 0.0;
+
   // Frequency-domain (from the dB trace).
   double peakFreqHz = 0.0;
   float peakLevelDbFs = 0.0f;

@@ -3,13 +3,14 @@
 #include <implot.h>
 
 #include <algorithm>
+#include <cstdio>
 
 namespace iqforge {
 
 void plotIQLines(const char* plotId, const Sample* data, size_t count, TimeDomainViewState& view, bool resetView,
-                 SharedXAxisLink& xLink, SampleCursorState& cursor, const TriggerState& trig) {
+                 SharedXAxisLink& xLink, TimeMarkerState& markers, const TriggerState& trig) {
   drawLineView(
-      plotId, "Amplitude", count, resetView, view, xLink, cursor,
+      plotId, "Amplitude", count, resetView, view, xLink, markers,
       [&](double& lo, double& hi) {
         float flo = data[0].real(), fhi = data[0].real();
         for (size_t i = 0; i < count; ++i) {
@@ -31,18 +32,22 @@ void plotIQLines(const char* plotId, const Sample* data, size_t count, TimeDomai
           ImPlot::PlotInfLines("##trigger_level", &lvl, 1, ImPlotInfLinesFlags_Horizontal);
         }
 
-        for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
-          if (!cursor.active[slot] || static_cast<size_t>(cursor.index[slot]) >= count) continue;
-          char tag = slot == 0 ? 'A' : 'B';
-          double cx = static_cast<double>(cursor.index[slot]);
-          double ci = data[cursor.index[slot]].real();
-          double cq = data[cursor.index[slot]].imag();
-          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
-          ImPlot::PlotScatter(slot == 0 ? "##cursor_i_a" : "##cursor_i_b", &cx, &ci, 1);
-          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
-          ImPlot::PlotScatter(slot == 0 ? "##cursor_q_a" : "##cursor_q_b", &cx, &cq, 1);
-          ImPlot::Annotation(cx, ci, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "%c I=%.4g", tag, ci);
-          ImPlot::Annotation(cx, cq, ImVec4(1, 1, 1, 1), ImVec2(10, 10), true, "%c Q=%.4g", tag, cq);
+        for (int i = 0; i < kMaxTimeMarkers; ++i) {
+          const TimeMarker& m = markers.markers[i];
+          if (!m.active || static_cast<size_t>(m.index) >= count) continue;
+          const ImVec4& col = timeMarkerColor(i);
+          double cx = static_cast<double>(m.index);
+          double ci = data[m.index].real();
+          double cq = data[m.index].imag();
+          char idI[16], idQ[16];
+          std::snprintf(idI, sizeof idI, "##marker_i_%d", i);
+          std::snprintf(idQ, sizeof idQ, "##marker_q_%d", i);
+          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, col, 1.5f, col);
+          ImPlot::PlotScatter(idI, &cx, &ci, 1);
+          ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, col, 1.5f, col);
+          ImPlot::PlotScatter(idQ, &cx, &cq, 1);
+          ImPlot::Annotation(cx, ci, col, ImVec2(10, -10), true, "M%d I=%.4g", i + 1, ci);
+          ImPlot::Annotation(cx, cq, col, ImVec2(10, 10), true, "M%d Q=%.4g", i + 1, cq);
         }
       });
 }

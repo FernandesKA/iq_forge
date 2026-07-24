@@ -4,6 +4,7 @@
 #include <implot.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -34,33 +35,55 @@ struct SharedXAxisLink {
   double max = 1.0;
 };
 
-// Two sample indices selected on any plot in a family of line views, so the
-// other views can mark the same x-position(s). `index` is in the shared
-// "Sample" domain (0..count-1 of the I/Q/phase window); the
-// instantaneous-frequency view has one fewer point and simply skips drawing
-// a cursor when its index falls on that last, missing sample. Cursor A is
-// placed with Ctrl+click, cursor B with Ctrl+Shift+click, so both can be set
-// independently for Delta-t/period measurements between them.
-struct SampleCursorState {
-  static constexpr int kCount = 2;
-  bool active[kCount] = {false, false};
-  int index[kCount] = {0, 0};
+constexpr int kMaxTimeMarkers = 4;
+
+// A single sample-index marker on a family of line views (I/Q, phase,
+// instantaneous frequency), so placing one on any of them shows on all
+// three. `index` is in the shared "Sample" domain (0..count-1 of the
+// I/Q/phase window); the instantaneous-frequency view has one fewer point
+// and simply skips drawing a marker when its index falls on that last,
+// missing sample. Mirrors SpectrumMarker in plot_spectrum.h.
+struct TimeMarker {
+  bool active = false;
+  int index = 0;
+  // Reference marker index for a delta readout (this marker's time/sample
+  // offset and amplitude shown relative to that marker), -1 = off.
+  int deltaRef = -1;
 };
+
+struct TimeMarkerState {
+  std::array<TimeMarker, kMaxTimeMarkers> markers{};
+  int selectedMarker = 0;
+};
+
+// Colors shared by the vertical marker line here and the scatter
+// point/annotation each plot_*.cpp draws at the marker's own y-value, so a
+// marker reads as one thing across I/Q, phase and instantaneous frequency
+// (and matches the spectrum's marker colors for consistency across the app).
+inline const ImVec4& timeMarkerColor(int index) {
+  static const ImVec4 kColors[kMaxTimeMarkers] = {
+      ImVec4(1.0f, 1.0f, 0.2f, 1.0f),
+      ImVec4(0.2f, 1.0f, 1.0f, 1.0f),
+      ImVec4(1.0f, 0.4f, 1.0f, 1.0f),
+      ImVec4(0.6f, 1.0f, 0.4f, 1.0f),
+  };
+  return kColors[index];
+}
 
 namespace detail {
 
-// Captures a Ctrl+click (cursor A) or Ctrl+Shift+click (cursor B) on the
-// plot as the new shared sample selection. Must be called after the plot's
-// axes are locked (e.g. after drawLines()) so GetPlotMousePos() is valid.
-inline void updateSampleCursor(SampleCursorState& cursor, size_t count) {
+// Captures a Ctrl+click on the plot as a new position for the currently
+// selected marker. Must be called after the plot's axes are locked (e.g.
+// after drawLines()) so GetPlotMousePos() is valid.
+inline void updateMarkerPlacement(TimeMarkerState& state, size_t count) {
   if (count == 0 || !ImPlot::IsPlotHovered()) return;
   if (!ImGui::GetIO().KeyCtrl || !ImGui::IsMouseClicked(ImGuiMouseButton_Left)) return;
-  int slot = ImGui::GetIO().KeyShift ? 1 : 0;
   ImPlotPoint mouse = ImPlot::GetPlotMousePos();
   long idx = std::lround(mouse.x);
   idx = std::max<long>(0, std::min<long>(idx, static_cast<long>(count) - 1));
-  cursor.active[slot] = true;
-  cursor.index[slot] = static_cast<int>(idx);
+  TimeMarker& m = state.markers[state.selectedMarker];
+  m.active = true;
+  m.index = static_cast<int>(idx);
 }
 
 } // namespace detail
@@ -73,25 +96,31 @@ inline void updateSampleCursor(SampleCursorState& cursor, size_t count) {
 // instead of trying to smoothly zoom into what's now a different signal
 // (this also drops any current sample selection, since it no longer
 // corresponds to the same instant in the new window).
-// `xLink` and `cursor` are shared across the whole family (same instances
-// passed to every call) so zoom/pan and point-selection stay in sync
+// `xLink` and `markers` are shared across the whole family (same instances
+// passed to every call) so zoom/pan and marker placement stay in sync
 // between them. `computeYRange(lo, hi)` fills the data's Y span;
 // `drawLines()` issues the actual ImPlot::PlotLine call(s) and, if it wants
-// to mark the current `cursor` selection on its own series, may read it
-// (it's updated by the time drawLines() runs). Call between
-// BeginPlot()/EndPlot() is handled internally.
+// to mark the current `markers` on its own series, may read them (they're
+// updated by the time drawLines() runs). Call between BeginPlot()/EndPlot()
+// is handled internally.
 template <typename ComputeYRange, typename DrawLines>
 void drawLineView(const char* plotId, const char* yLabel, size_t count, bool resetView, LineViewState& view,
-                   SharedXAxisLink& xLink, SampleCursorState& cursor, ComputeYRange&& computeYRange,
+                   SharedXAxisLink& xLink, TimeMarkerState& markers, ComputeYRange&& computeYRange,
                    DrawLines&& drawLines) {
   bool fitRequested = ImGui::Button("Fit signal");
   ImGui::SameLine();
   AxisZoomRequest zoomReq = drawAxisZoomButtons(view.zoom.valid && count > 0);
   mergeZoomRequest(zoomReq, consumeWheelZoomRequest(view.zoom));
   ImGui::SameLine();
-  ImGui::TextDisabled(
-      "Wheel: zoom X, Shift+wheel: zoom Y, drag: pan, double-click: fit, H/V: zoom one axis, Ctrl+click: cursor A, "
-      "Ctrl+Shift+click: cursor B");
+  ImGui::TextDisabled("Ctrl+click: place selected marker");
+  ImGui::SameLine();
+  HelpMarker(
+      "Wheel -- zoom X\n"
+      "Shift+wheel -- zoom Y\n"
+      "Drag -- pan\n"
+      "Double-click -- fit\n"
+      "H+/H-/V+/V- -- zoom one axis\n"
+      "Ctrl+click -- place the selected marker (M1..M4)");
 
   bool hasData = count > 0;
   if (!hasData) view.hadData = false;
@@ -107,8 +136,7 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
   if (hasData && count != view.lastCount) fitRequested = true;
   view.lastCount = count;
   if (resetView) {
-    cursor.active[0] = false;
-    cursor.active[1] = false;
+    for (TimeMarker& m : markers.markers) m.active = false;
   }
   view.hadData |= hasData;
 
@@ -127,18 +155,15 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
     }
     if (!fitRequested) applyAxisZoom(zoomReq, view.zoom);
     if (hasData) drawLines();
-    if (hasData) detail::updateSampleCursor(cursor, count);
+    if (hasData) detail::updateMarkerPlacement(markers, count);
     if (hasData) {
-      static const ImVec4 kCursorColors[SampleCursorState::kCount] = {
-          ImVec4(1.0f, 0.85f, 0.2f, 0.7f),
-          ImVec4(0.3f, 0.85f, 1.0f, 0.7f),
-      };
-      for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
-        if (!cursor.active[slot] || static_cast<size_t>(cursor.index[slot]) >= count) continue;
-        double cx = static_cast<double>(cursor.index[slot]);
-        ImPlot::SetNextLineStyle(kCursorColors[slot], 1.5f);
+      for (int i = 0; i < kMaxTimeMarkers; ++i) {
+        const TimeMarker& m = markers.markers[i];
+        if (!m.active || static_cast<size_t>(m.index) >= count) continue;
+        double cx = static_cast<double>(m.index);
+        ImPlot::SetNextLineStyle(timeMarkerColor(i), 1.5f);
         char id[16];
-        std::snprintf(id, sizeof id, "##cursor_%d", slot);
+        std::snprintf(id, sizeof id, "##marker_%d", i);
         ImPlot::PlotInfLines(id, &cx, 1);
       }
     }
