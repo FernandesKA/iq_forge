@@ -93,7 +93,7 @@ jobs:
         uses: johnwason/vcpkg-action@v6
         id: vcpkg
         with:
-          pkgs: glfw3 gl3w fftw3 libusb
+          pkgs: glfw3 gl3w fftw3 libusb pthreads
           triplet: x64-windows
           token: ${{ github.token }}
 
