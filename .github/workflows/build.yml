@@ -84,6 +84,11 @@ jobs:
           choco install ninja
           choco install pkgconfiglite
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Install vcpkg
         uses: johnwason/vcpkg-action@v6
         id: vcpkg
@@ -96,16 +101,16 @@ jobs:
         env:
           PKG_CONFIG_PATH: ${{ github.workspace }}\vcpkg\installed\x64-windows\lib\pkgconfig
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF ${{ steps.vcpkg.outputs.vcpkg-cmake-config }} -G "Visual Studio 17 2022" -A x64
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF ${{ steps.vcpkg.outputs.vcpkg-cmake-config }} -G Ninja
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --parallel
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: iqforge-windows-x86_64
-          path: build/Release/iqforge.exe
+          path: build/iqforge.exe
 
   release:
     needs: [build-linux-x86_64, build-windows]
