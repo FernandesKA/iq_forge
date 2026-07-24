@@ -65,7 +65,7 @@ if(WIN32)
   set(LIBHACKRF_SHIM_DIR "${CMAKE_BINARY_DIR}/_deps/libhackrf-shim")
   file(COPY "${hackrf_SOURCE_DIR}/host/libhackrf/src/hackrf.h"
        DESTINATION "${LIBHACKRF_SHIM_DIR}/libhackrf")
-  target_include_directories(hackrf INTERFACE "${LIBHACKRF_SHIM_DIR}")
+  target_include_directories(hackrf INTERFACE "$<BUILD_INTERFACE:${LIBHACKRF_SHIM_DIR}>")
 
   add_library(PkgConfig::LIBHACKRF ALIAS hackrf)
 else()
