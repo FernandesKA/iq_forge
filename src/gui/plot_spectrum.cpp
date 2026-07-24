@@ -373,7 +373,7 @@ void drawMarkersOnPlot(const SpectrumViewState& view, const std::vector<float>& 
   }
 }
 
-void drawBandOnPlot(SpectrumViewState& view, double sampleRateHz) {
+void drawBandOnPlot(SpectrumViewState& view, double sampleRateHz, const std::vector<float>& db) {
   if (!view.bandEnabled) return;
   double lo = -sampleRateHz / 2.0, hi = sampleRateHz / 2.0;
   view.bandLoHz = std::clamp(view.bandLoHz, lo, hi);
@@ -389,6 +389,15 @@ void drawBandOnPlot(SpectrumViewState& view, double sampleRateHz) {
   ImVec4 edgeCol(0.3f, 0.6f, 1.0f, 0.8f);
   ImPlot::DragLineX(9001, &view.bandLoHz, edgeCol, 1.5f);
   ImPlot::DragLineX(9002, &view.bandHiHz, edgeCol, 1.5f);
+
+  // Echo the band-power/peak readout (also shown in the controls above)
+  // right under the band itself, so it's visible without looking away from
+  // the plot -- especially useful right after a Shift+drag selection.
+  if (!db.empty()) {
+    BandStats st = computeBandStats(db, sampleRateHz, view.bandLoHz, view.bandHiHz);
+    double cx = (xs[0] + xs[1]) / 2.0;
+    ImPlot::Annotation(cx, lim.Y.Min, edgeCol, ImVec2(0, -6), true, "%.1f dBFS  pk %.1f dBFS", st.powerDb, st.peakDb);
+  }
 }
 
 } // namespace
@@ -399,9 +408,16 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
 
   if (db.empty()) view.hadData = false;
   const bool scaleChanged = view.sampleRateHz != sampleRateHz;
-  if ((!view.hadData && !db.empty()) || scaleChanged) fitRequested = true;
+  if ((!view.hadData && !db.empty()) || scaleChanged) {
+    fitRequested = true;
+    view.fitSettleFrames = kFitSettleFrames;
+  }
   view.hadData |= !db.empty();
   view.sampleRateHz = sampleRateHz;
+  if (!db.empty() && view.fitSettleFrames > 0) {
+    fitRequested = true;
+    --view.fitSettleFrames;
+  }
 
   if (scaleChanged) {
     // Accumulated dB-per-bin traces no longer correspond to a consistent
@@ -427,7 +443,7 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
   AxisZoomRequest zoomReq = drawAxisZoomButtons(view.zoom.valid && !db.empty());
   mergeZoomRequest(zoomReq, consumeWheelZoomRequest(view.zoom));
   ImGui::SameLine();
-  ImGui::TextDisabled("Ctrl+click: place marker");
+  ImGui::TextDisabled("Ctrl+click: place marker, Shift+drag: measure a range");
   ImGui::SameLine();
   HelpMarker(
       "Wheel -- zoom X\n"
@@ -435,7 +451,9 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
       "Drag -- pan\n"
       "Double-click -- fit\n"
       "H+/H-/V+/V- -- zoom one axis\n"
-      "Ctrl+click on the plot -- place the selected marker (M1..M4)");
+      "Ctrl+click on the plot -- place the selected marker (M1..M4)\n"
+      "Shift+drag on the plot -- set the band marker to the dragged range\n"
+      "Right-click while dragging -- cancel the selection");
 
   SpectrumMeasurements measurements = computeMeasurements(db, sampleRateHz, timeDomain);
   constexpr float kMeasurementsWidth = 230.0f;
@@ -477,7 +495,18 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
         ImPlot::PlotLine("Peak hold", view.peakHoldDb.data(), n, xscale, xstart);
       }
 
-      drawBandOnPlot(view, sampleRateHz);
+      // Shift+drag selects a frequency range to measure -- reuse the band
+      // marker for it (same power/peak readout, just set from the drag
+      // instead of the Lo/Hi fields or dragging its edges by hand).
+      RangeSelection rangeSel = readRangeSelection();
+      if (rangeSel.active) {
+        view.bandEnabled = true;
+        view.bandInit = true;
+        view.bandLoHz = rangeSel.loX;
+        view.bandHiHz = rangeSel.hiX;
+      }
+
+      drawBandOnPlot(view, sampleRateHz, db);
       drawMarkersOnPlot(view, db);
       updateMarkerPlacement(view, db, sampleRateHz);
     }

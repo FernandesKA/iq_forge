@@ -8,9 +8,10 @@
 namespace iqforge {
 
 void plotIQLines(const char* plotId, const Sample* data, size_t count, TimeDomainViewState& view, bool resetView,
-                 SharedXAxisLink& xLink, TimeMarkerState& markers, const TriggerState& trig) {
+                 SharedXAxisLink& xLink, TimeMarkerState& markers, TimeRangeSelection& rangeSel,
+                 const TriggerState& trig) {
   drawLineView(
-      plotId, "Amplitude", count, resetView, view, xLink, markers,
+      plotId, "Amplitude", count, resetView, view, xLink, markers, rangeSel,
       [&](double& lo, double& hi) {
         float flo = data[0].real(), fhi = data[0].real();
         for (size_t i = 0; i < count; ++i) {

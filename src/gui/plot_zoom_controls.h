@@ -8,6 +8,16 @@
 
 namespace iqforge {
 
+// How many frames to keep force-re-fitting a plot's axes after its data
+// first appears (or after a discontinuous reset), instead of fitting just
+// once and leaving it. A plot's first block of data is often not
+// representative yet -- spectrum averaging hasn't converged, a just-started
+// TX/RX hasn't reached steady amplitude -- so fitting once, right then,
+// tends to lock in an odd zoom that only "Fit signal" fixes afterward. This
+// keeps re-fitting for a brief window instead, matching app.cpp's vsync
+// frame rate (glfwSwapInterval(1)), so it settles on its own; ~0.75s.
+constexpr int kFitSettleFrames = 45;
+
 // Call right after drawing a widget to decide whether the *next* one
 // (estimated width `nextWidth`, see wrapButtonWidth() below) should
 // continue on the same line or wrap to a new one. Standard ImGui manual-
@@ -167,6 +177,47 @@ inline void captureWheelZoomRequest(AxisZoomState& state) {
 // wheel / Shift+wheel entirely to captureWheelZoomRequest() above.
 inline void configurePlotWheelZoom() {
   ImPlot::GetInputMap().ZoomMod = ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiMod_Alt | ImGuiMod_Super;
+}
+
+// Call once at startup, alongside configurePlotWheelZoom(). Remaps ImPlot's
+// box-selection gesture from its default (right-drag) to Shift+left-drag,
+// so a Shift+drag on any plot reads as "select this range to measure" (see
+// RangeSelection below) instead of colliding with the plain left-drag pan
+// already bound everywhere in this app. ImPlot itself suppresses panning
+// for the duration of a selection drag, so the two gestures never fight.
+inline void configurePlotBoxSelect() {
+  ImPlotInputMap& map = ImPlot::GetInputMap();
+  map.Select = ImGuiMouseButton_Left;
+  map.SelectMod = ImGuiMod_Shift;
+  // Select and SelectCancel can't be the same button; right-click cancels
+  // an in-progress selection instead (it still also opens the context menu
+  // on a plain click, same as ImPlot's own default -- the two are already
+  // meant to coexist on one button upstream).
+  map.SelectCancel = ImGuiMouseButton_Right;
+}
+
+// A Shift+drag box selection on a plot's X axis, read via
+// IsPlotSelected()/GetPlotSelection() (see configurePlotBoxSelect() above).
+// Releasing the mouse zooms the plot to the selection -- ImPlot's own
+// behavior for a confirmed selection -- which for a measurement gesture
+// doubles as "and now show me that range up close", so it's left as-is
+// rather than fought.
+struct RangeSelection {
+  bool active = false;
+  double loX = 0.0;
+  double hiX = 0.0;
+};
+
+// Call after the plot's axes are locked (e.g. after drawing the main
+// series), before EndPlot().
+inline RangeSelection readRangeSelection() {
+  RangeSelection sel;
+  if (!ImPlot::IsPlotSelected()) return sel;
+  ImPlotRect r = ImPlot::GetPlotSelection();
+  sel.active = true;
+  sel.loX = r.X.Min;
+  sel.hiX = r.X.Max;
+  return sel;
 }
 
 // Stops panning/zooming (wheel, drag, or the H/V buttons above) from going

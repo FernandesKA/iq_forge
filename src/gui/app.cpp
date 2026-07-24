@@ -87,6 +87,7 @@ bool App::init() {
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   configurePlotWheelZoom();
+  configurePlotBoxSelect();
 
   ImGui::StyleColorsDark();
 

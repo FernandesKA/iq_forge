@@ -41,6 +41,36 @@ FixedFreqUnit pickFixedFreqUnit(double sampleRateHz) {
 
 } // namespace
 
+TimeDomainStats computeTimeDomainStats(const Sample* data, size_t count) {
+  TimeDomainStats s;
+  if (count == 0) return s;
+  s.valid = true;
+
+  double sumSq = 0.0;
+  float peakMag = 0.0f;
+  std::complex<double> sumC(0.0, 0.0);
+  long clip = 0;
+  for (size_t i = 0; i < count; ++i) {
+    float re = data[i].real(), im = data[i].imag();
+    float mag2 = re * re + im * im;
+    sumSq += mag2;
+    peakMag = std::max(peakMag, std::sqrt(mag2));
+    sumC += std::complex<double>(re, im);
+    if (std::abs(re) >= kClipThreshold || std::abs(im) >= kClipThreshold) ++clip;
+  }
+  auto n = static_cast<double>(count);
+  double rms = std::sqrt(sumSq / n);
+  double dcMag = std::abs(sumC) / n;
+
+  s.rmsDbFs = static_cast<float>(20.0 * std::log10(std::max(rms, 1e-15)));
+  s.peakDbFs = static_cast<float>(20.0 * std::log10(std::max(static_cast<double>(peakMag), 1e-15)));
+  s.crestFactorDb = s.peakDbFs - s.rmsDbFs;
+  s.dcOffsetDbFs = static_cast<float>(20.0 * std::log10(std::max(dcMag, 1e-15)));
+  s.clippingCount = clip;
+  s.clippingPct = 100.0 * static_cast<double>(clip) / n;
+  return s;
+}
+
 SpectrumMeasurements computeMeasurements(const std::vector<float>& db, double sampleRateHz,
                                           const std::vector<Sample>& timeDomain) {
   SpectrumMeasurements m;
@@ -102,31 +132,7 @@ SpectrumMeasurements computeMeasurements(const std::vector<float>& db, double sa
   m.bw3dBHz = bwAtThreshold(3.0f);
   m.bw6dBHz = bwAtThreshold(6.0f);
 
-  m.hasTimeStats = !timeDomain.empty();
-  if (m.hasTimeStats) {
-    double sumSq = 0.0;
-    float peakMag = 0.0f;
-    std::complex<double> sumC(0.0, 0.0);
-    long clip = 0;
-    for (const Sample& s : timeDomain) {
-      float re = s.real(), im = s.imag();
-      float mag2 = re * re + im * im;
-      sumSq += mag2;
-      peakMag = std::max(peakMag, std::sqrt(mag2));
-      sumC += std::complex<double>(re, im);
-      if (std::abs(re) >= kClipThreshold || std::abs(im) >= kClipThreshold) ++clip;
-    }
-    auto count = static_cast<double>(timeDomain.size());
-    double rms = std::sqrt(sumSq / count);
-    double dcMag = std::abs(sumC) / count;
-
-    m.rmsDbFs = static_cast<float>(20.0 * std::log10(std::max(rms, 1e-15)));
-    m.timePeakDbFs = static_cast<float>(20.0 * std::log10(std::max(static_cast<double>(peakMag), 1e-15)));
-    m.crestFactorDb = m.timePeakDbFs - m.rmsDbFs;
-    m.dcOffsetDbFs = static_cast<float>(20.0 * std::log10(std::max(dcMag, 1e-15)));
-    m.clippingCount = clip;
-    m.clippingPct = 100.0 * static_cast<double>(clip) / count;
-  }
+  m.timeStats = computeTimeDomainStats(timeDomain.data(), timeDomain.size());
 
   return m;
 }
@@ -171,16 +177,17 @@ void drawMeasurementsTable(const SpectrumMeasurements& m) {
   ImGui::TableSetColumnIndex(1);
   ImGui::Separator();
 
-  if (m.hasTimeStats) {
-    std::snprintf(buf, sizeof buf, "%.1f dBFS", m.rmsDbFs);
+  const TimeDomainStats& ts = m.timeStats;
+  if (ts.valid) {
+    std::snprintf(buf, sizeof buf, "%.1f dBFS", ts.rmsDbFs);
     row("RMS", buf);
-    std::snprintf(buf, sizeof buf, "%.1f dBFS", m.timePeakDbFs);
+    std::snprintf(buf, sizeof buf, "%.1f dBFS", ts.peakDbFs);
     row("Peak (time)", buf);
-    std::snprintf(buf, sizeof buf, "%.1f dB", m.crestFactorDb);
+    std::snprintf(buf, sizeof buf, "%.1f dB", ts.crestFactorDb);
     row("Crest factor", buf);
-    std::snprintf(buf, sizeof buf, "%.1f dBFS", m.dcOffsetDbFs);
+    std::snprintf(buf, sizeof buf, "%.1f dBFS", ts.dcOffsetDbFs);
     row("DC offset", buf);
-    std::snprintf(buf, sizeof buf, "%ld (%.2f%%)", m.clippingCount, m.clippingPct);
+    std::snprintf(buf, sizeof buf, "%ld (%.2f%%)", ts.clippingCount, ts.clippingPct);
     row("Clipping", buf);
   } else {
     row("RMS / peak / crest", "-");

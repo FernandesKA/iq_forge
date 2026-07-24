@@ -2,9 +2,11 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
+#include "measurements.h"
 #include "plot_format.h"
 #include "plot_instfreq.h"
 #include "plot_phase.h"
@@ -38,6 +40,7 @@ struct VisualizationTabState {
   InstFreqViewState instFreqView;
   SharedXAxisLink timeDomainXLink;
   TimeMarkerState timeDomainMarkers;
+  TimeRangeSelection timeDomainRangeSelection;
 };
 
 // Reported back to the caller (which owns AppState/the device) when a
@@ -113,6 +116,27 @@ void drawTimeMarkerControls(TimeMarkerState& state, const Sample* data, size_t c
   }
 }
 
+// RMS/peak/crest/DC/clipping for a Shift+drag range selection (see
+// TimeRangeSelection in plot_line_view.h), reusing the same
+// computeTimeDomainStats() the spectrum's measurements table uses for the
+// whole buffer -- just scoped to the dragged sample span instead.
+void drawTimeRangeReadout(const TimeRangeSelection& sel, const Sample* data, size_t count, double sampleRateHz) {
+  if (!sel.active || count == 0) {
+    ImGui::TextDisabled("Shift+drag a plot below to measure a sample range");
+    return;
+  }
+  int lo = std::clamp(sel.loIndex, 0, static_cast<int>(count) - 1);
+  int hi = std::clamp(sel.hiIndex, 0, static_cast<int>(count) - 1);
+  if (hi < lo) std::swap(lo, hi);
+  size_t segCount = static_cast<size_t>(hi - lo + 1);
+  TimeDomainStats st = computeTimeDomainStats(data + lo, segCount);
+  double dt = sampleRateHz > 0.0 ? static_cast<double>(segCount) / sampleRateHz : 0.0;
+  ImGui::Text("Selection: samples %d..%d (%s)   RMS %.1f dBFS   Peak %.1f dBFS   Crest %.1f dB   DC %.1f dBFS   "
+              "Clip %ld (%.2f%%)",
+              lo, hi, formatSeconds(dt).c_str(), st.rmsDbFs, st.peakDbFs, st.crestFactorDb, st.dcOffsetDbFs,
+              st.clippingCount, st.clippingPct);
+}
+
 VisualizationRequest drawVisualizationWindow(const char* windowTitle, VisualizationTabState& tab,
                                               const std::vector<Sample>& timeDomain,
                                               const std::vector<float>& spectrumDb,
@@ -161,26 +185,27 @@ VisualizationRequest drawVisualizationWindow(const char* windowTitle, Visualizat
     auto [triggeredData, triggeredCount] = applyTrigger(timeDomain, tab.trigger);
 
     drawTimeMarkerControls(tab.timeDomainMarkers, triggeredData, triggeredCount, sampleRateHz);
+    drawTimeRangeReadout(tab.timeDomainRangeSelection, triggeredData, triggeredCount, sampleRateHz);
 
     if (tab.showIQ) {
       ImGui::Text("I/Q");
       ImGui::PushID("iq");
       plotIQLines("##iq", triggeredData, triggeredCount, tab.iqView, resetFromTrigger, tab.timeDomainXLink,
-                  tab.timeDomainMarkers, tab.trigger);
+                  tab.timeDomainMarkers, tab.timeDomainRangeSelection, tab.trigger);
       ImGui::PopID();
     }
     if (tab.showPhase) {
       ImGui::Text("Phase");
       ImGui::PushID("phase");
       plotPhaseLine("##phase", triggeredData, triggeredCount, tab.phaseView, resetFromTrigger, tab.timeDomainXLink,
-                    tab.timeDomainMarkers);
+                    tab.timeDomainMarkers, tab.timeDomainRangeSelection);
       ImGui::PopID();
     }
     if (tab.showInstFreq) {
       ImGui::Text("Instantaneous frequency");
       ImGui::PushID("instfreq");
       plotInstFreqLine("##instfreq", triggeredData, triggeredCount, sampleRateHz, tab.instFreqView, resetFromTrigger,
-                        tab.timeDomainXLink, tab.timeDomainMarkers);
+                        tab.timeDomainXLink, tab.timeDomainMarkers, tab.timeDomainRangeSelection);
       ImGui::PopID();
     }
     ImGui::PopID();

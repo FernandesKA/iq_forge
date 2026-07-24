@@ -13,7 +13,7 @@ constexpr double kPi = 3.14159265358979323846;
 } // namespace
 
 void plotPhaseLine(const char* plotId, const Sample* data, size_t count, PhaseViewState& view, bool resetView,
-                    SharedXAxisLink& xLink, TimeMarkerState& markers) {
+                    SharedXAxisLink& xLink, TimeMarkerState& markers, TimeRangeSelection& rangeSel) {
   // Reused scratch buffer -- safe across the RX/TX windows sharing this TU
   // because it's filled and fully consumed (by PlotLine, synchronously)
   // within a single call, same convention as plot_waterfall.cpp's `flat`.
@@ -24,7 +24,7 @@ void plotPhaseLine(const char* plotId, const Sample* data, size_t count, PhaseVi
   }
 
   drawLineView(
-      plotId, "Phase (rad)", count, resetView, view, xLink, markers,
+      plotId, "Phase (rad)", count, resetView, view, xLink, markers, rangeSel,
       [](double& lo, double& hi) {
         // atan2() always returns a value in [-pi, pi], so the range is
         // fixed rather than scanned from the data.

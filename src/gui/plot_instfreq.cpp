@@ -21,7 +21,8 @@ double wrapToPi(double phase) {
 } // namespace
 
 void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, double sampleRateHz,
-                      InstFreqViewState& view, bool resetView, SharedXAxisLink& xLink, TimeMarkerState& markers) {
+                      InstFreqViewState& view, bool resetView, SharedXAxisLink& xLink, TimeMarkerState& markers,
+                      TimeRangeSelection& rangeSel) {
   size_t n = count > 1 ? count - 1 : 0;
 
   // Reused scratch buffer -- see plot_phase.cpp for why this is safe.
@@ -35,7 +36,7 @@ void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, doub
   }
 
   drawLineView(
-      plotId, "Frequency (Hz)", n, resetView, view, xLink, markers,
+      plotId, "Frequency (Hz)", n, resetView, view, xLink, markers, rangeSel,
       [&](double& lo, double& hi) {
         auto [minIt, maxIt] = std::minmax_element(freq.begin(), freq.end());
         lo = *minIt;

@@ -155,7 +155,11 @@ void drawTxPanel(AppState& state) {
                           -nyquistHz / 1e6, nyquistHz / 1e6);
     }
 
-    if (active && generatorChanged) {
+    // Keep the generator's live config in sync regardless of whether TX is
+    // actually running, not just while active -- AppState::updateDisplays()
+    // previews the configured waveform even when idle, so edits need to
+    // reach it immediately for that preview to reflect them.
+    if (generatorChanged) {
       state.genConfig.sampleRateHz = state.sampleRateHz;
       state.generator->setConfig(state.genConfig);
     }

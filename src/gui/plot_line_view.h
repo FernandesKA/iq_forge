@@ -19,6 +19,8 @@ struct LineViewState {
   // below, triggering the initial fit.
   size_t lastCount = static_cast<size_t>(-1);
   AxisZoomState zoom;
+  // See kFitSettleFrames in plot_zoom_controls.h.
+  int fitSettleFrames = 0;
 };
 
 // X-axis range shared by a family of line views (I/Q, phase, inst. freq)
@@ -54,6 +56,17 @@ struct TimeMarker {
 struct TimeMarkerState {
   std::array<TimeMarker, kMaxTimeMarkers> markers{};
   int selectedMarker = 0;
+};
+
+// A Shift+drag range selection (see readRangeSelection() in
+// plot_zoom_controls.h) shared across the I/Q/phase/inst.-freq family, like
+// TimeMarkerState above -- dragging on any one of them measures the same
+// sample range on all three. Indices are in the same shared "Sample" domain
+// as TimeMarker.
+struct TimeRangeSelection {
+  bool active = false;
+  int loIndex = 0;
+  int hiIndex = 0;
 };
 
 // Colors shared by the vertical marker line here and the scatter
@@ -105,14 +118,14 @@ inline void updateMarkerPlacement(TimeMarkerState& state, size_t count) {
 // is handled internally.
 template <typename ComputeYRange, typename DrawLines>
 void drawLineView(const char* plotId, const char* yLabel, size_t count, bool resetView, LineViewState& view,
-                   SharedXAxisLink& xLink, TimeMarkerState& markers, ComputeYRange&& computeYRange,
-                   DrawLines&& drawLines) {
+                   SharedXAxisLink& xLink, TimeMarkerState& markers, TimeRangeSelection& rangeSel,
+                   ComputeYRange&& computeYRange, DrawLines&& drawLines) {
   bool fitRequested = ImGui::Button("Fit signal");
   ImGui::SameLine();
   AxisZoomRequest zoomReq = drawAxisZoomButtons(view.zoom.valid && count > 0);
   mergeZoomRequest(zoomReq, consumeWheelZoomRequest(view.zoom));
   ImGui::SameLine();
-  ImGui::TextDisabled("Ctrl+click: place selected marker");
+  ImGui::TextDisabled("Ctrl+click: place marker, Shift+drag: measure a range");
   ImGui::SameLine();
   HelpMarker(
       "Wheel -- zoom X\n"
@@ -120,11 +133,16 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
       "Drag -- pan\n"
       "Double-click -- fit\n"
       "H+/H-/V+/V- -- zoom one axis\n"
-      "Ctrl+click -- place the selected marker (M1..M4)");
+      "Ctrl+click -- place the selected marker (M1..M4)\n"
+      "Shift+drag -- select a sample range to measure (RMS/peak/etc.)\n"
+      "Right-click while dragging -- cancel the selection");
 
   bool hasData = count > 0;
   if (!hasData) view.hadData = false;
-  if ((!view.hadData && hasData) || resetView) fitRequested = true;
+  if ((!view.hadData && hasData) || resetView) {
+    fitRequested = true;
+    view.fitSettleFrames = kFitSettleFrames;
+  }
   // Keep re-fitting while `count` is still changing frame to frame -- e.g.
   // right after TX/RX starts, while the trigger's window (or the raw
   // rolling buffer, if the trigger is off) is still filling up from empty.
@@ -135,8 +153,17 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
   // manual zoom/pan takes over as usual.
   if (hasData && count != view.lastCount) fitRequested = true;
   view.lastCount = count;
+  // Beyond that, keep re-fitting for a further settle window: `count`
+  // stabilizing doesn't mean the *values* have -- e.g. a trigger-selected
+  // window can hold steady in size while its amplitude is still ramping up
+  // right after TX/RX starts.
+  if (hasData && view.fitSettleFrames > 0) {
+    fitRequested = true;
+    --view.fitSettleFrames;
+  }
   if (resetView) {
     for (TimeMarker& m : markers.markers) m.active = false;
+    rangeSel.active = false;
   }
   view.hadData |= hasData;
 
@@ -149,7 +176,15 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
       constrainAxisToData(ImAxis_X1, 0.0, static_cast<double>(count - 1), 0.05);
       constrainAxisToData(ImAxis_Y1, lo, hi, 0.1);
       if (fitRequested) {
-        ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, static_cast<double>(count - 1), ImPlotCond_Always);
+        // Written to xLink directly (not just via SetupAxisLimits) so a
+        // fit on this plot is immediately visible to its siblings too, even
+        // within the same frame -- SetupAxisLinks() below only pulls *from*
+        // xLink at Setup time, so waiting on ImPlot's own end-of-frame
+        // link-sync to carry the fitted range over isn't reliable when more
+        // than one sibling plot fits on the same frame.
+        xLink.min = 0.0;
+        xLink.max = static_cast<double>(count - 1);
+        ImPlot::SetupAxisLimits(ImAxis_X1, xLink.min, xLink.max, ImPlotCond_Always);
         fitAxisWithMargin(ImAxis_Y1, lo, hi, 0.1);
       }
     }
@@ -165,6 +200,14 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
         char id[16];
         std::snprintf(id, sizeof id, "##marker_%d", i);
         ImPlot::PlotInfLines(id, &cx, 1);
+      }
+      RangeSelection sel = readRangeSelection();
+      if (sel.active) {
+        long lo = std::lround(sel.loX);
+        long hi = std::lround(sel.hiX);
+        rangeSel.active = true;
+        rangeSel.loIndex = static_cast<int>(std::max<long>(0, lo));
+        rangeSel.hiIndex = static_cast<int>(std::min<long>(static_cast<long>(count) - 1, hi));
       }
     }
     captureWheelZoomRequest(view.zoom);

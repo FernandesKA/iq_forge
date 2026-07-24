@@ -26,6 +26,12 @@ void processSpectrum(FftProcessor& fft, const SampleBuffer& block, std::vector<f
     fft.process(block.data(), block.size(), outDb);
   }
 }
+
+// Samples generated per frame for the idle TX preview below -- arbitrary,
+// just enough to give the spectrum/time-domain views a decent-sized window;
+// unrelated to any hardware TX buffer size since nothing is actually being
+// streamed to a device here.
+constexpr size_t kGeneratorPreviewSamples = 4096;
 } // namespace
 
 void AppState::updateDisplays() {
@@ -51,6 +57,24 @@ void AppState::updateDisplays() {
     appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
     processSpectrum(txFft, block, txSpectrumDb);
   }
+
+  // Without an active TX, the generator otherwise never runs, so the
+  // signal being configured is invisible until the user actually starts
+  // transmitting -- preview it directly here instead, using the same
+  // continuously-running generator instance startTx() would hand to the
+  // device (safe: isTxActive() and the device's own thread-join on stop
+  // ensure this and the real TX thread never call generate() at once).
+  if (!gotTx && !isTxActive() && txSourceMode == 0) {
+    block.resize(kGeneratorPreviewSamples);
+    size_t got = generator->generate(block.data(), block.size());
+    if (got > 0) {
+      block.resize(got);
+      gotTx = true;
+      appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
+      processSpectrum(txFft, block, txSpectrumDb);
+    }
+  }
+
   if (gotTx) pushWaterfallRow(txWaterfallRows, txSpectrumDb, kWaterfallMaxRows);
 }
 

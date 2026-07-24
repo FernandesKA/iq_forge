@@ -6,13 +6,28 @@
 
 namespace iqforge {
 
+// RMS/peak/crest-factor/DC-offset/clipping over a raw IQ sample range.
+// Factored out of SpectrumMeasurements (below) so a Shift+drag range
+// selection on the time-domain plots (see plot_line_view.h) can show the
+// same stats for just the selected segment, not only the whole buffer.
+struct TimeDomainStats {
+  bool valid = false; // false if `count` was 0
+  float rmsDbFs = 0.0f;
+  float peakDbFs = 0.0f;
+  float crestFactorDb = 0.0f; // peakDbFs - rmsDbFs
+  float dcOffsetDbFs = 0.0f;  // |mean(samples)|, relative to full scale
+  long clippingCount = 0;     // samples with |I| or |Q| >= 0.999 (near full scale)
+  double clippingPct = 0.0;
+};
+
+TimeDomainStats computeTimeDomainStats(const Sample* data, size_t count);
+
 // A snapshot of standard spectrum/time-domain measurements, computed fresh
 // each frame from the current spectrum trace and raw IQ buffer -- unlike
 // markers, these need no placement and always describe "the signal that's
 // there right now".
 struct SpectrumMeasurements {
-  bool valid = false;      // false if there's no spectrum data yet
-  bool hasTimeStats = false; // false if there's no time-domain data yet
+  bool valid = false; // false if there's no spectrum data yet
 
   // Kept only so drawMeasurementsTable() can pick one fixed frequency unit
   // for the whole table (Nyquist-scaled) instead of each row auto-scaling
@@ -30,12 +45,7 @@ struct SpectrumMeasurements {
   float channelPowerDbFs = 0.0f; // total power integrated across the full displayed span
 
   // Time-domain (from the raw IQ buffer).
-  float rmsDbFs = 0.0f;
-  float timePeakDbFs = 0.0f;
-  float crestFactorDb = 0.0f; // timePeakDbFs - rmsDbFs
-  float dcOffsetDbFs = 0.0f;  // |mean(samples)|, relative to full scale
-  long clippingCount = 0;     // samples with |I| or |Q| >= 0.999 (near full scale)
-  double clippingPct = 0.0;
+  TimeDomainStats timeStats;
 };
 
 // `db` is the same fftshifted baseband dB trace plotSpectrum() draws;

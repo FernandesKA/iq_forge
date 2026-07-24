@@ -28,6 +28,8 @@ struct SpectrumViewState {
   bool hadData = false;
   double sampleRateHz = 0.0;
   AxisZoomState zoom;
+  // See kFitSettleFrames in plot_zoom_controls.h.
+  int fitSettleFrames = 0;
 
   // --- Markers ---
   std::array<SpectrumMarker, kMaxSpectrumMarkers> markers{};
