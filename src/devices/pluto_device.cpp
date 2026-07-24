@@ -168,6 +168,20 @@ void PlutoDevice::stopTx() {
   txStopFlag_ = true;
   if (txThread_.joinable()) txThread_.join();
   if (txBuf_) {
+    // The AD9361 TX DMA keeps repeating the last buffer it was handed even
+    // after the host stops pushing new ones -- there's no implicit mute on
+    // stream stop. Push one buffer of silence before tearing down so the
+    // radio actually stops radiating instead of looping the tail of
+    // whatever was last transmitted.
+    ptrdiff_t inc = iio_buffer_step(txBuf_);
+    char* end = static_cast<char*>(iio_buffer_end(txBuf_));
+    for (char* p = static_cast<char*>(iio_buffer_first(txBuf_, txChanI_)); p < end; p += inc) {
+      int16_t* iq = reinterpret_cast<int16_t*>(p);
+      iq[0] = 0;
+      iq[1] = 0;
+    }
+    iio_buffer_push(txBuf_);
+
     iio_buffer_destroy(txBuf_);
     txBuf_ = nullptr;
   }

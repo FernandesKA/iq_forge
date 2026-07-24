@@ -201,7 +201,7 @@ void drawMarkerControls(SpectrumViewState& view, const std::vector<float>& db, d
     float amp = db[m.binIndex];
     ImGui::TextColored(kMarkerColors[i], "M%d:", i + 1);
     ImGui::SameLine();
-    ImGui::Text("%s   %.2f dB", formatHz(f).c_str(), amp);
+    ImGui::Text("%s   %.2f dBFS", formatHz(f).c_str(), amp);
     if (m.deltaRef >= 0 && m.deltaRef < kMaxSpectrumMarkers && view.markers[m.deltaRef].active) {
       const SpectrumMarker& r = view.markers[m.deltaRef];
       double fr = binToFreq(r.binIndex, sampleRateHz, n);
@@ -235,7 +235,8 @@ void drawBandMarkerControls(SpectrumViewState& view, const std::vector<float>& d
 
     if (!db.empty()) {
       BandStats st = computeBandStats(db, sampleRateHz, view.bandLoHz, view.bandHiHz);
-      ImGui::Text("Band power: %.2f dB   Peak: %.2f dB @ %s", st.powerDb, st.peakDb, formatHz(st.peakFreqHz).c_str());
+      ImGui::Text("Band power: %.2f dBFS   Peak: %.2f dBFS @ %s", st.powerDb, st.peakDb,
+                  formatHz(st.peakFreqHz).c_str());
     }
   }
 
@@ -420,7 +421,7 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
   updateAccumulators(view, db);
 
   if (ImPlot::BeginPlot(plotId, ImVec2(-1, 220))) {
-    ImPlot::SetupAxes("Frequency (Hz, baseband)", "Power (dB)");
+    ImPlot::SetupAxes("Frequency (Hz, baseband)", "Power (dBFS)");
     if (!db.empty()) {
       auto [minIt, maxIt] = std::minmax_element(db.begin(), db.end());
       constrainAxisToData(ImAxis_X1, -sampleRateHz / 2.0, sampleRateHz / 2.0, 0.02);
