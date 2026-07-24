@@ -29,6 +29,7 @@ add_executable(iqforge
   gui/panel_visualization.cpp
   gui/plot_time_domain.cpp
   gui/plot_spectrum.cpp
+  gui/measurements.cpp
   gui/plot_waterfall.cpp
   gui/plot_phase.cpp
   gui/plot_instfreq.cpp

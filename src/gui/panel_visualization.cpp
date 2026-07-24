@@ -100,7 +100,7 @@ VisualizationRequest drawVisualizationWindow(const char* windowTitle, Visualizat
   if (tab.showSpectrum) {
     ImGui::SeparatorText("Spectrum");
     ImGui::PushID("spectrum");
-    plotSpectrum("##spectrum", spectrumDb, sampleRateHz, centerFreqHz, tab.spectrumView);
+    plotSpectrum("##spectrum", spectrumDb, sampleRateHz, centerFreqHz, timeDomain, tab.spectrumView);
     if (tab.spectrumView.centerFreqRequested) {
       tab.spectrumView.centerFreqRequested = false;
       request.retuneRequested = true;

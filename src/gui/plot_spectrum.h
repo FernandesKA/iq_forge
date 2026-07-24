@@ -4,6 +4,7 @@
 #include <deque>
 #include <vector>
 
+#include "../core/sample_types.h"
 #include "plot_zoom_controls.h"
 
 namespace iqforge {
@@ -68,12 +69,15 @@ struct SpectrumViewState {
 };
 
 // Draws one dB-magnitude spectrum plot for `db` (baseband, -sampleRateHz/2
-// .. +sampleRateHz/2). `view` persists zoom/fit/marker/trace state across
+// .. +sampleRateHz/2), plus a compact measurements table to its right (see
+// measurements.h). `view` persists zoom/fit/marker/trace state across
 // frames and automatically re-fits when the sample rate changes.
 // `centerFreqHz` is the device's current absolute center frequency; it's
 // only used to compute the absolute target frequency for "-> Center Freq"
-// (the plot itself, like its X axis, stays in baseband terms).
+// (the plot itself, like its X axis, stays in baseband terms). `timeDomain`
+// is the raw rolling IQ buffer for the same direction as `db`, needed for
+// the measurements table's RMS/peak/crest/DC/clipping rows.
 void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampleRateHz, double centerFreqHz,
-                   SpectrumViewState& view);
+                   const std::vector<Sample>& timeDomain, SpectrumViewState& view);
 
 } // namespace iqforge

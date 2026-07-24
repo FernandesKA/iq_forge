@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "measurements.h"
 #include "plot_format.h"
 
 namespace iqforge {
@@ -390,7 +391,7 @@ void drawBandOnPlot(SpectrumViewState& view, double sampleRateHz) {
 } // namespace
 
 void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampleRateHz, double centerFreqHz,
-                   SpectrumViewState& view) {
+                   const std::vector<Sample>& timeDomain, SpectrumViewState& view) {
   bool fitRequested = ImGui::Button("Fit signal");
   ImGui::SameLine();
   AxisZoomRequest zoomReq = drawAxisZoomButtons(view.zoom.valid && !db.empty());
@@ -420,6 +421,10 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
   drawTraceControls(view);
   updateAccumulators(view, db);
 
+  SpectrumMeasurements measurements = computeMeasurements(db, sampleRateHz, timeDomain);
+  constexpr float kMeasurementsWidth = 230.0f;
+
+  ImGui::BeginChild("##spectrum_plot", ImVec2(-kMeasurementsWidth - 8.0f, 220), false, ImGuiWindowFlags_NoScrollbar);
   if (ImPlot::BeginPlot(plotId, ImVec2(-1, 220))) {
     ImPlot::SetupAxes("Frequency (Hz, baseband)", "Power (dBFS)");
     if (!db.empty()) {
@@ -464,6 +469,12 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
     captureAxisZoomState(view.zoom);
     ImPlot::EndPlot();
   }
+  ImGui::EndChild();
+
+  ImGui::SameLine();
+  ImGui::BeginChild("##spectrum_measurements", ImVec2(kMeasurementsWidth, 220), true);
+  drawMeasurementsTable(measurements);
+  ImGui::EndChild();
 }
 
 } // namespace iqforge
