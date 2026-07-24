@@ -6,9 +6,11 @@
 #include <cmath>
 #include <memory>
 
+#include "../dsp/resampler.h"
 #include "duration_input.h"
 #include "file_browser.h"
 #include "freq_input.h"
+#include "plot_format.h"
 
 namespace iqforge {
 
@@ -170,6 +172,75 @@ void drawTxPanel(AppState& state) {
     bool browseClicked = ImGui::Button("Browse...");
     ImGui::Checkbox("Loop", &state.fileLoop);
     ImGui::TextDisabled("Formats: .cf32/.fc32 (float32 IQ), .ci16/.sc16 (int16 IQ), .wav (PCM16)");
+
+    // Raw IQ files don't carry their own sample rate, so resampling needs
+    // the user to say what the file was actually recorded at. Each control
+    // gets its own row -- FrequencyInputHz alone is already wide (numeric
+    // field + 4 unit buttons + label), so chaining more onto the same line
+    // via SameLine() overflowed the narrow TX Control dock panel.
+    bool resampleToggled = ImGui::Checkbox("Resample on load", &state.fileResampleEnabled);
+    // Seed a sensible starting coefficient (the one that lands exactly on
+    // the device's configured TX rate) the moment resampling is turned on;
+    // left alone after that so the user's own edits stick.
+    if (resampleToggled && state.fileResampleEnabled && state.fileSourceRateHz > 0.0) {
+      state.fileResampleCoefficient = state.sampleRateHz / state.fileSourceRateHz;
+    }
+    if (state.fileResampleEnabled) {
+      FrequencyInputHz("File sample rate", &state.fileSourceRateHz, &state.fileSourceRateUnit);
+
+      ImGui::SetNextItemWidth(140.0f);
+      ImGui::InputDouble("Resample coefficient", &state.fileResampleCoefficient, 0.0, 0.0, "%.6g");
+      state.fileResampleCoefficient = std::max(state.fileResampleCoefficient, 1e-6);
+
+      double resultingRateHz = state.fileSourceRateHz * state.fileResampleCoefficient;
+      ImGui::TextDisabled("Resulting rate: %s", formatHz(resultingRateHz).c_str());
+      if (std::abs(resultingRateHz - state.sampleRateHz) > 1.0) {
+        ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Device TX rate is %s -- playback speed/pitch will differ",
+                            formatHz(state.sampleRateHz).c_str());
+      }
+    }
+
+    if (ImGui::Button("Load")) {
+      try {
+        SampleBuffer raw = loadIqFile(state.filePathBuffer);
+        SampleBuffer ready;
+        if (state.fileResampleEnabled) {
+          double targetRateHz = state.fileSourceRateHz * state.fileResampleCoefficient;
+          ready = resampleIq(raw, state.fileSourceRateHz, targetRateHz);
+          state.log("Resampled IQ file from " + formatHz(state.fileSourceRateHz) + " to " + formatHz(targetRateHz) +
+                     " (x" + std::to_string(state.fileResampleCoefficient) + ", " + std::to_string(raw.size()) +
+                     " -> " + std::to_string(ready.size()) + " samples)");
+        } else {
+          ready = std::move(raw);
+        }
+        // Also used by the idle preview below and by Start TX -- loading
+        // immediately makes the file's signal/spectrum visible without
+        // having to transmit first, same as the generator preview.
+        state.fileSource = std::make_shared<IQFileSource>(std::move(ready), state.fileLoop);
+        state.fileLoadedPath = state.filePathBuffer;
+        state.fileLoadError.clear();
+        state.log("Loaded IQ file: " + state.fileLoadedPath + " (" +
+                   std::to_string(state.fileSource->totalSamples()) + " samples)");
+      } catch (const std::exception& e) {
+        state.fileLoadError = e.what();
+        state.fileSource.reset();
+        state.fileLoadedPath.clear();
+        state.log("IQ file load failed: " + state.fileLoadError);
+      }
+    }
+    // Status text can be an arbitrary (possibly long) file path or error
+    // message, so it wraps within the panel's width instead of either
+    // overflowing off-screen or being force-fit onto one line.
+    bool loaded = state.fileSource && state.fileLoadedPath == state.filePathBuffer;
+    ImGui::PushTextWrapPos(0.0f);
+    if (loaded) {
+      ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Loaded: %zu samples", state.fileSource->totalSamples());
+    } else if (!state.fileLoadError.empty()) {
+      ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s", state.fileLoadError.c_str());
+    } else {
+      ImGui::TextDisabled("Not loaded -- click Load to preview the signal/spectrum before transmitting");
+    }
+    ImGui::PopTextWrapPos();
     ImGui::EndDisabled();
 
     DrawIqFileBrowserPopup("Select IQ file", browseClicked, state.filePathBuffer, sizeof(state.filePathBuffer));
@@ -186,14 +257,15 @@ void drawTxPanel(AppState& state) {
         state.genConfig.sampleRateHz = state.sampleRateHz;
         state.generator->setConfig(state.genConfig);
         source = state.generator;
+      } else if (state.fileSource && state.fileLoadedPath == state.filePathBuffer) {
+        // Reuses the already-loaded (and already-previewing) source instead
+        // of reloading, so playback continues from the preview's current
+        // position instead of restarting from sample 0.
+        source = state.fileSource;
       } else {
-        try {
-          source = std::make_shared<IQFileSource>(IQFileSource::fromFile(state.filePathBuffer, state.fileLoop));
-        } catch (const std::exception& e) {
-          state.txError = e.what();
-          state.log("TX file load failed: " + state.txError);
-          ok = false;
-        }
+        state.txError = "Load the IQ file first (see Load button above)";
+        state.log("TX start failed: " + state.txError);
+        ok = false;
       }
       if (ok) {
         auto tee = std::make_shared<TeeSampleSource>(source, &state.txPreviewRing);

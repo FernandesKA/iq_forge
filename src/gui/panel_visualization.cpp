@@ -141,19 +141,25 @@ VisualizationRequest drawVisualizationWindow(const char* windowTitle, Visualizat
                                               const std::vector<Sample>& timeDomain,
                                               const std::vector<float>& spectrumDb,
                                               const std::deque<WaterfallRow>& waterfallRows, double sampleRateHz,
-                                              double centerFreqHz) {
+                                              double centerFreqHz, bool& frozen) {
   VisualizationRequest request;
   ImGui::Begin(windowTitle);
 
   ImGui::Checkbox("Spectrum", &tab.showSpectrum);
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Waterfall"));
   ImGui::Checkbox("Waterfall", &tab.showWaterfall);
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("I/Q"));
   ImGui::Checkbox("I/Q", &tab.showIQ);
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Phase"));
   ImGui::Checkbox("Phase", &tab.showPhase);
-  ImGui::SameLine();
+  sameLineOrWrap(wrapButtonWidth("Inst. freq"));
   ImGui::Checkbox("Inst. freq", &tab.showInstFreq);
+  sameLineOrWrap(wrapButtonWidth("Freeze"));
+  ImGui::Checkbox("Freeze", &frozen);
+  if (frozen) {
+    sameLineOrWrap(wrapButtonWidth("(display paused -- RX/TX itself keeps running)"));
+    ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "(display paused -- RX/TX itself keeps running)");
+  }
   ImGui::Separator();
 
   // Each section gets its own ID scope: "Fit signal"/"H+"/"H-"/"V+"/"V-"
@@ -232,15 +238,17 @@ void applyCenterFreqRetune(AppState& state, double hz) {
 
 void drawTxVisualizationPanel(AppState& state) {
   static VisualizationTabState tab;
-  VisualizationRequest req = drawVisualizationWindow("TX", tab, state.txTimeDomain, state.txSpectrumDb,
-                                                       state.txWaterfallRows, state.sampleRateHz, state.centerFreqHz);
+  VisualizationRequest req =
+      drawVisualizationWindow("TX", tab, state.txTimeDomain, state.txSpectrumDb, state.txWaterfallRows,
+                               state.sampleRateHz, state.centerFreqHz, state.txFrozen);
   if (req.retuneRequested) applyCenterFreqRetune(state, req.retuneToHz);
 }
 
 void drawRxVisualizationPanel(AppState& state) {
   static VisualizationTabState tab;
-  VisualizationRequest req = drawVisualizationWindow("RX", tab, state.rxTimeDomain, state.rxSpectrumDb,
-                                                       state.rxWaterfallRows, state.sampleRateHz, state.centerFreqHz);
+  VisualizationRequest req =
+      drawVisualizationWindow("RX", tab, state.rxTimeDomain, state.rxSpectrumDb, state.rxWaterfallRows,
+                               state.sampleRateHz, state.centerFreqHz, state.rxFrozen);
   if (req.retuneRequested) applyCenterFreqRetune(state, req.retuneToHz);
 }
 

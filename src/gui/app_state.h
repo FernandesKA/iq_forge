@@ -56,12 +56,32 @@ struct AppState {
   TimeUnit pulsePeriodUnit = TimeUnit::Us;
   char filePathBuffer[512] = "";
   bool fileLoop = true;
+  // Raw formats (.cf32/.ci16) don't store their own sample rate, so the user
+  // states what the file was recorded at. On Load, resampleIq() converts it
+  // to fileSourceRateHz * fileResampleCoefficient (the resulting rate shown
+  // in the UI) if resampling is enabled.
+  double fileSourceRateHz = 3e6;
+  FreqUnit fileSourceRateUnit = FreqUnit::MHz;
+  bool fileResampleEnabled = false;
+  double fileResampleCoefficient = 1.0;
+  std::string fileLoadedPath; // path fileSource below was actually loaded from, "" if none/stale
+  std::string fileLoadError;
+  // Shared by the idle preview in updateDisplays() and "Start TX" -- Start
+  // TX just hands this same instance to the device, so playback continues
+  // from wherever the preview's read position left off instead of jumping
+  // back to the start.
+  std::shared_ptr<IQFileSource> fileSource;
   std::string txError;
   RingBuffer<SampleBuffer> txPreviewRing{8};
   std::vector<Sample> txTimeDomain;
   std::vector<float> txSpectrumDb;
   FftProcessor txFft{SpectrumConfig{2048, WindowType::Hann, 0.3f}};
   std::deque<WaterfallRow> txWaterfallRows;
+  // Pauses updateDisplays()'s writes to the fields above -- TX itself (and,
+  // for RX below, recording) keeps running untouched; only what's shown
+  // stops changing, so a signal can be inspected/measured without it
+  // scrolling out from under the cursor.
+  bool txFrozen = false;
 
   bool isTxActive() const {
     return deviceManager.device() && deviceManager.device()->isTxRunning();
@@ -74,6 +94,10 @@ struct AppState {
   std::vector<float> rxSpectrumDb;
   FftProcessor rxFft{SpectrumConfig{2048, WindowType::Hann, 0.3f}};
   std::deque<WaterfallRow> rxWaterfallRows;
+  // See txFrozen above. Recording (below) is unaffected by this -- it's
+  // fed from the same drained blocks regardless of whether the display is
+  // frozen, since pausing the view shouldn't silently pause a recording.
+  bool rxFrozen = false;
 
   bool rxRecording = false;
   char rxRecordPathBuffer[512] = "recording.cf32";

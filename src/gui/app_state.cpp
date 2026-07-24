@@ -42,36 +42,46 @@ void AppState::updateDisplays() {
   SampleBuffer block;
   bool gotRx = false;
   while (rxRing.tryPop(block)) {
-    gotRx = true;
-    appendTrim(rxTimeDomain, block, kTimeDomainMaxSamples);
-    processSpectrum(rxFft, block, rxSpectrumDb);
+    // Recording is independent of the freeze below -- pausing the display
+    // shouldn't silently pause a capture the user explicitly started.
     if (rxRecording) {
       rxRecordBuffer.insert(rxRecordBuffer.end(), block.begin(), block.end());
     }
+    if (rxFrozen) continue;
+    gotRx = true;
+    appendTrim(rxTimeDomain, block, kTimeDomainMaxSamples);
+    processSpectrum(rxFft, block, rxSpectrumDb);
   }
   if (gotRx) pushWaterfallRow(rxWaterfallRows, rxSpectrumDb, kWaterfallMaxRows);
 
   bool gotTx = false;
-  while (txPreviewRing.tryPop(block)) {
-    gotTx = true;
-    appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
-    processSpectrum(txFft, block, txSpectrumDb);
-  }
-
-  // Without an active TX, the generator otherwise never runs, so the
-  // signal being configured is invisible until the user actually starts
-  // transmitting -- preview it directly here instead, using the same
-  // continuously-running generator instance startTx() would hand to the
-  // device (safe: isTxActive() and the device's own thread-join on stop
-  // ensure this and the real TX thread never call generate() at once).
-  if (!gotTx && !isTxActive() && txSourceMode == 0) {
-    block.resize(kGeneratorPreviewSamples);
-    size_t got = generator->generate(block.data(), block.size());
-    if (got > 0) {
-      block.resize(got);
+  if (!txFrozen) {
+    while (txPreviewRing.tryPop(block)) {
       gotTx = true;
       appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
       processSpectrum(txFft, block, txSpectrumDb);
+    }
+
+    // Without an active TX, neither the generator nor a loaded file source
+    // otherwise ever runs, so the signal being configured is invisible until
+    // the user actually starts transmitting -- preview it directly here
+    // instead, using the very same source instance startTx() would hand to
+    // the device (safe: isTxActive() and the device's own thread-join on
+    // stop ensure this and the real TX thread never call generate() at once).
+    if (!gotTx && !isTxActive()) {
+      block.resize(kGeneratorPreviewSamples);
+      size_t got = 0;
+      if (txSourceMode == 0) {
+        got = generator->generate(block.data(), block.size());
+      } else if (fileSource) {
+        got = fileSource->generate(block.data(), block.size());
+      }
+      if (got > 0) {
+        block.resize(got);
+        gotTx = true;
+        appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
+        processSpectrum(txFft, block, txSpectrumDb);
+      }
     }
   }
 

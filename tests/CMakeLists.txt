@@ -4,6 +4,7 @@ add_executable(iqforge_tests
   test_signal_generator.cpp
   test_iq_file.cpp
   test_fft_processor.cpp
+  test_resampler.cpp
 )
 target_link_libraries(iqforge_tests PRIVATE iqforge_core)
 target_include_directories(iqforge_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

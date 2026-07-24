@@ -120,6 +120,15 @@ add_library(implot STATIC
 target_include_directories(implot PUBLIC ${implot_SOURCE_DIR})
 target_link_libraries(implot PUBLIC imgui)
 
+# Vendored as a git submodule (third_party/libsamplerate) rather than
+# FetchContent like imgui/implot above, so it's pinned and vendored inside
+# the repo itself instead of re-cloned by CMake on every fresh configure.
+# Used for IQ file resampling (see src/dsp/resampler.h).
+set(LIBSAMPLERATE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LIBSAMPLERATE_INSTALL OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+add_subdirectory(third_party/libsamplerate)
+
 add_subdirectory(src)
 
 install(TARGETS iqforge

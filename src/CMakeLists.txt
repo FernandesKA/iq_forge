@@ -2,6 +2,7 @@ add_library(iqforge_core STATIC
   dsp/signal_generator.cpp
   dsp/iq_file.cpp
   dsp/fft_processor.cpp
+  dsp/resampler.cpp
   devices/pluto_device.cpp
   devices/hackrf_device.cpp
   devices/device_manager.cpp
@@ -13,6 +14,7 @@ target_link_libraries(iqforge_core PUBLIC
   PkgConfig::LIBHACKRF
   PkgConfig::FFTW3F
   Threads::Threads
+  samplerate
 )
 
 add_executable(iqforge
