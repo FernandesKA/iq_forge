@@ -43,12 +43,14 @@ void plotInstFreqLine(const char* plotId, const Sample* data, size_t count, doub
       [&]() {
         ImPlot::PlotLine("Inst. freq", freq.data(), static_cast<int>(n));
 
-        if (cursor.active && static_cast<size_t>(cursor.index) < n) {
-          double cx = static_cast<double>(cursor.index);
-          double cy = freq[cursor.index];
+        for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
+          if (!cursor.active[slot] || static_cast<size_t>(cursor.index[slot]) >= n) continue;
+          char tag = slot == 0 ? 'A' : 'B';
+          double cx = static_cast<double>(cursor.index[slot]);
+          double cy = freq[cursor.index[slot]];
           ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
-          ImPlot::PlotScatter("##cursor_freq", &cx, &cy, 1);
-          ImPlot::Annotation(cx, cy, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "Freq=%.4g Hz", cy);
+          ImPlot::PlotScatter(slot == 0 ? "##cursor_freq_a" : "##cursor_freq_b", &cx, &cy, 1);
+          ImPlot::Annotation(cx, cy, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "%c Freq=%.4g Hz", tag, cy);
         }
       });
 }

@@ -1,55 +1,81 @@
 # IQ Forge
 
-A desktop GUI application for transmitting and receiving IQ signals with SDR hardware.
+Десктопное GUI-приложение для приёма и передачи IQ-сигналов через SDR-оборудование.
 
-## Features
+## Возможности
 
-### Device support
-- **PlutoSDR** and **HackRF** support, with automatic USB/network discovery (mDNS/Avahi) for PlutoSDR.
-- Configurable sample rate, center frequency, bandwidth, TX/RX gain.
-- Live connection health checks — the UI reflects when a device is unplugged.
+### Поддержка устройств
+- **PlutoSDR** и **HackRF**, с автоматическим поиском по USB/сети (mDNS/Avahi для PlutoSDR).
+- Настраиваемые частота дискретизации, центральная частота, полоса пропускания, усиление TX/RX.
+- Проверка связи с устройством в реальном времени — интерфейс сразу показывает, если устройство отключилось.
 
-### Signal generation (TX)
-- Built-in waveform generator with multiple signal types:
-  - Single tone
-  - Multi-tone
-  - Chirp (linear FM sweep, up or down)
-  - Rectangular pulse
-  - Barker-coded BPSK sequences (all standard codes, lengths 2–13)
-  - Noise
-  - Ramp
-- Optional pulse envelope, allowing any waveform (e.g. a chirp) to be gated on/off to form a pulsed radar-like signal.
-- Transmit from a loaded IQ file instead of the generator, with optional looping.
-- Live preview of the transmitted signal (time domain + spectrum).
+### Генерация сигнала (TX)
+- Встроенный генератор с несколькими типами сигналов:
+  - Одиночный тон
+  - Мульти-тон
+  - Чирп (линейная ЧМ, вверх или вниз)
+  - Прямоугольный импульс
+  - Баркер-кодированные BPSK-последовательности (все стандартные коды, длины 2–13)
+  - Шум
+  - Пила (ramp)
+- Опциональная импульсная огибающая — любую форму сигнала (например, чирп) можно "открывать/закрывать", получая импульсный радароподобный сигнал.
+- Передача из загруженного IQ-файла вместо генератора, с опциональным зацикливанием.
+- Живое превью передаваемого сигнала (временная область + спектр).
 
-### Receiving (RX)
-- Live time-domain and spectrum view of received samples.
-- Scrolling waterfall/spectrogram display.
-- Record incoming IQ samples to disk on demand.
+### Приём (RX)
+- Живой просмотр принятых сэмплов во временной области и спектре.
+- Прокручиваемая водопадная диаграмма (waterfall/спектрограмма).
+- Запись принятых IQ-сэмплов на диск по требованию.
 
-### IQ file I/O
-- Load and save IQ files in common formats:
+### Работа с IQ-файлами
+- Загрузка и сохранение IQ-файлов в распространённых форматах:
   - Raw interleaved float32 (`.cf32`/`.fc32`)
   - Raw interleaved int16 (`.ci16`/`.sc16`)
   - PCM16 stereo WAV (`.wav`)
-- Built-in file browser popup for picking files without typing paths by hand.
+- Встроенный диалог выбора файлов.
 
-### Visualization
-- Configurable FFT-based spectrum analyzer (window type, averaging).
-- Time-domain plot.
-- Waterfall plot with adjustable history depth.
-- Zoom controls on plots.
+### Визуализация
 
-## Building
+Каждое окно визуализации (TX и RX) объединяет в себе спектр, водопад, I/Q, фазу и мгновенную частоту — каждая панель включается/выключается своим чекбоксом.
+
+#### Управление масштабом (общее для всех графиков)
+- **Колесо мыши** — зум по оси X.
+- **Shift + колесо мыши** — зум по оси Y.
+- **Перетаскивание (drag)** — панорамирование.
+- **Двойной клик** — сброс к автоподбору масштаба ("Fit signal").
+- Кнопки **H+/H-/V+/V-** — зум по отдельной оси без мыши.
+
+#### Спектр — маркеры и измерения
+- **Маркеры M1–M4**: ставятся по **Ctrl+клик** по графику на выбранный (подсвеченный) маркер. Кнопки `M1`…`M4` над графиком выбирают, какой из маркеров сейчас "активен" для установки/поиска.
+- **Peak search** — переносит активный маркер на самый сильный пик спектра.
+- **Next peak** — переносит активный маркер на следующий по силе пик (поиск пиков учитывает превышение не менее 6 дБ над соседним провалом, чтобы шум не считался отдельными пиками).
+- **-> Center freq** — перестраивает центральную частоту устройства на частоту активного маркера (если устройство подключено — переключает и реальное железо).
+- **Delta ref** — выбор второго маркера как опорного: у активного маркера появляется показание Δ-частоты и Δ-амплитуды относительно опорного.
+- **Clear** — снять текущий маркер.
+- **Band marker** — включаемая полоса измерения: два края можно как перетаскивать мышью прямо на графике, так и задавать числами (Lo/Hi, Гц). Показывает суммарную мощность в полосе и пиковое значение внутри неё.
+- **Trace / peak hold / persistence**:
+  - **Trace: Live / Max hold / Min hold** — режим отображаемой трассы (обычный live-спектр, накопление максимумов или минимумов по каждому бину). Кнопка **Reset hold** сбрасывает накопление.
+  - **Peak hold** — независимый оверлей "пиковых значений с момента включения" (отдельно от режима Trace, можно включить одновременно с Live). **Clear peak hold** сбрасывает его.
+  - **Persistence** — "послесвечение": на графике полупрозрачно остаются последние ~24 развёртки, более старые — более бледные. **Clear persistence** очищает историю.
+
+#### Временная область — курсоры и триггер
+- **Ctrl+клик** по любому из графиков (I/Q, фаза, мгн. частота) ставит **курсор A**, **Ctrl+Shift+клик** — **курсор B**. Курсоры общие для всех трёх графиков и двигаются синхронно.
+- Когда оба курсора расставлены, над графиками выводится:
+  - **dt (period)** — интервал времени между курсорами (удобно для измерения периода сигнала);
+  - **1/dt (freq)** — соответствующая частота;
+  - **dAmplitude** — разница амплитуд (|IQ|) между точками курсоров.
+- **Триггер** (панель над I/Q-графиком): включение, фронт (rising/falling), источник (I/Q/модуль), авто- или ручной уровень, размер окна. Текущий уровень триггера отображается на графике I/Q горизонтальной линией.
+
+## Сборка
 
 ```sh
 cmake -B build
 cmake --build build
 ```
 
-Requires GLFW, OpenGL, libiio, fftw3f, and libhackrf development packages.
+Требуются пакеты: GLFW, OpenGL, libiio, fftw3f и libhackrf.
 
-## Running tests
+## Запуск тестов
 
 ```sh
 cmake --build build --target test

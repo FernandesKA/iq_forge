@@ -28,6 +28,10 @@ struct TriggerState {
   bool autoLevel = true;
   float manualLevel = 0.0f;
   int windowSamples = 2000;
+  // Level actually used by the last applyTrigger() call (== manualLevel
+  // when autoLevel is off, or the computed midpoint when it's on) so the
+  // level can be drawn on the plot regardless of which mode is active.
+  float effectiveLevel = 0.0f;
 
   // Held from the last successful search, shown when the current buffer
   // doesn't (yet) contain a fresh crossing so the plot doesn't flicker.
@@ -117,6 +121,7 @@ inline std::pair<const Sample*, size_t> applyTrigger(const std::vector<Sample>& 
     }
     level = (lo + hi) * 0.5f;
   }
+  trig.effectiveLevel = level;
 
   // Search from the latest index that still leaves a full window after it,
   // going backward, so we find the *most recent* usable crossing.

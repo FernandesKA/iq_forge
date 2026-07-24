@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 
 #include "plot_zoom_controls.h"
 
@@ -33,29 +34,33 @@ struct SharedXAxisLink {
   double max = 1.0;
 };
 
-// A single sample index selected (Ctrl+click) on any plot in a family of
-// line views, so the other views can mark the same x-position. `index` is
-// in the shared "Sample" domain (0..count-1 of the I/Q/phase window); the
+// Two sample indices selected on any plot in a family of line views, so the
+// other views can mark the same x-position(s). `index` is in the shared
+// "Sample" domain (0..count-1 of the I/Q/phase window); the
 // instantaneous-frequency view has one fewer point and simply skips drawing
-// the marker when index falls on that last, missing sample.
+// a cursor when its index falls on that last, missing sample. Cursor A is
+// placed with Ctrl+click, cursor B with Ctrl+Shift+click, so both can be set
+// independently for Delta-t/period measurements between them.
 struct SampleCursorState {
-  bool active = false;
-  int index = 0;
+  static constexpr int kCount = 2;
+  bool active[kCount] = {false, false};
+  int index[kCount] = {0, 0};
 };
 
 namespace detail {
 
-// Captures a Ctrl+click on the plot as the new shared sample selection.
-// Must be called after the plot's axes are locked (e.g. after drawLines())
-// so GetPlotMousePos() is valid.
+// Captures a Ctrl+click (cursor A) or Ctrl+Shift+click (cursor B) on the
+// plot as the new shared sample selection. Must be called after the plot's
+// axes are locked (e.g. after drawLines()) so GetPlotMousePos() is valid.
 inline void updateSampleCursor(SampleCursorState& cursor, size_t count) {
   if (count == 0 || !ImPlot::IsPlotHovered()) return;
   if (!ImGui::GetIO().KeyCtrl || !ImGui::IsMouseClicked(ImGuiMouseButton_Left)) return;
+  int slot = ImGui::GetIO().KeyShift ? 1 : 0;
   ImPlotPoint mouse = ImPlot::GetPlotMousePos();
   long idx = std::lround(mouse.x);
   idx = std::max<long>(0, std::min<long>(idx, static_cast<long>(count) - 1));
-  cursor.active = true;
-  cursor.index = static_cast<int>(idx);
+  cursor.active[slot] = true;
+  cursor.index[slot] = static_cast<int>(idx);
 }
 
 } // namespace detail
@@ -85,8 +90,8 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
   mergeZoomRequest(zoomReq, consumeWheelZoomRequest(view.zoom));
   ImGui::SameLine();
   ImGui::TextDisabled(
-      "Wheel: zoom X, Shift+wheel: zoom Y, drag: pan, double-click: fit, H/V: zoom one axis, Ctrl+click: select "
-      "sample");
+      "Wheel: zoom X, Shift+wheel: zoom Y, drag: pan, double-click: fit, H/V: zoom one axis, Ctrl+click: cursor A, "
+      "Ctrl+Shift+click: cursor B");
 
   bool hasData = count > 0;
   if (!hasData) view.hadData = false;
@@ -101,7 +106,10 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
   // manual zoom/pan takes over as usual.
   if (hasData && count != view.lastCount) fitRequested = true;
   view.lastCount = count;
-  if (resetView) cursor.active = false;
+  if (resetView) {
+    cursor.active[0] = false;
+    cursor.active[1] = false;
+  }
   view.hadData |= hasData;
 
   if (ImPlot::BeginPlot(plotId, ImVec2(-1, 220))) {
@@ -120,10 +128,19 @@ void drawLineView(const char* plotId, const char* yLabel, size_t count, bool res
     if (!fitRequested) applyAxisZoom(zoomReq, view.zoom);
     if (hasData) drawLines();
     if (hasData) detail::updateSampleCursor(cursor, count);
-    if (hasData && cursor.active && static_cast<size_t>(cursor.index) < count) {
-      double cx = static_cast<double>(cursor.index);
-      ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.85f, 0.2f, 0.7f), 1.5f);
-      ImPlot::PlotInfLines("##cursor_line", &cx, 1);
+    if (hasData) {
+      static const ImVec4 kCursorColors[SampleCursorState::kCount] = {
+          ImVec4(1.0f, 0.85f, 0.2f, 0.7f),
+          ImVec4(0.3f, 0.85f, 1.0f, 0.7f),
+      };
+      for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
+        if (!cursor.active[slot] || static_cast<size_t>(cursor.index[slot]) >= count) continue;
+        double cx = static_cast<double>(cursor.index[slot]);
+        ImPlot::SetNextLineStyle(kCursorColors[slot], 1.5f);
+        char id[16];
+        std::snprintf(id, sizeof id, "##cursor_%d", slot);
+        ImPlot::PlotInfLines(id, &cx, 1);
+      }
     }
     captureWheelZoomRequest(view.zoom);
     captureAxisZoomState(view.zoom);

@@ -7,7 +7,7 @@
 namespace iqforge {
 
 void plotIQLines(const char* plotId, const Sample* data, size_t count, TimeDomainViewState& view, bool resetView,
-                 SharedXAxisLink& xLink, SampleCursorState& cursor) {
+                 SharedXAxisLink& xLink, SampleCursorState& cursor, const TriggerState& trig) {
   drawLineView(
       plotId, "Amplitude", count, resetView, view, xLink, cursor,
       [&](double& lo, double& hi) {
@@ -25,16 +25,24 @@ void plotIQLines(const char* plotId, const Sample* data, size_t count, TimeDomai
         ImPlot::PlotLine("I", base, n, 1.0, 0.0, 0, 0, sizeof(Sample));
         ImPlot::PlotLine("Q", base + 1, n, 1.0, 0.0, 0, 0, sizeof(Sample));
 
-        if (cursor.active && static_cast<size_t>(cursor.index) < count) {
-          double cx = static_cast<double>(cursor.index);
-          double ci = data[cursor.index].real();
-          double cq = data[cursor.index].imag();
+        if (trig.enabled) {
+          double lvl = trig.effectiveLevel;
+          ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.45f, 0.1f, 0.6f), 1.0f);
+          ImPlot::PlotInfLines("##trigger_level", &lvl, 1, ImPlotInfLinesFlags_Horizontal);
+        }
+
+        for (int slot = 0; slot < SampleCursorState::kCount; ++slot) {
+          if (!cursor.active[slot] || static_cast<size_t>(cursor.index[slot]) >= count) continue;
+          char tag = slot == 0 ? 'A' : 'B';
+          double cx = static_cast<double>(cursor.index[slot]);
+          double ci = data[cursor.index[slot]].real();
+          double cq = data[cursor.index[slot]].imag();
           ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
-          ImPlot::PlotScatter("##cursor_i", &cx, &ci, 1);
+          ImPlot::PlotScatter(slot == 0 ? "##cursor_i_a" : "##cursor_i_b", &cx, &ci, 1);
           ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1, 1, 1, 1), 1.5f, ImVec4(1, 1, 1, 1));
-          ImPlot::PlotScatter("##cursor_q", &cx, &cq, 1);
-          ImPlot::Annotation(cx, ci, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "I=%.4g", ci);
-          ImPlot::Annotation(cx, cq, ImVec4(1, 1, 1, 1), ImVec2(10, 10), true, "Q=%.4g", cq);
+          ImPlot::PlotScatter(slot == 0 ? "##cursor_q_a" : "##cursor_q_b", &cx, &cq, 1);
+          ImPlot::Annotation(cx, ci, ImVec4(1, 1, 1, 1), ImVec2(10, -10), true, "%c I=%.4g", tag, ci);
+          ImPlot::Annotation(cx, cq, ImVec4(1, 1, 1, 1), ImVec2(10, 10), true, "%c Q=%.4g", tag, cq);
         }
       });
 }
