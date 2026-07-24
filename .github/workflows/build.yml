@@ -5,115 +5,6 @@ on:
   pull_request:
 
 jobs:
-  build-linux-x86_64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake pkg-config dpkg-dev wget \
-            libglfw3-dev libgl1-mesa-dev \
-            libiio-dev libhackrf-dev libfftw3-dev
-
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Create Debian package
-        run: cpack --config build/CPackConfig.cmake -G DEB
-
-      - name: Install AppImageTool
-        run: |
-          wget -O appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-
-      - name: Create AppImage
-        run: |
-          mkdir -p dist-appimage
-          mkdir -p appimage-root/usr/bin
-          cp build/src/iqforge appimage-root/usr/bin/iqforge
-          mkdir -p appimage-root/usr/share/applications
-          mkdir -p appimage-root/usr/share/doc/iqforge
-          cat > appimage-root/usr/share/applications/iqforge.desktop <<'EOF'
-          [Desktop Entry]
-          Name=iqforge
-          Exec=iqforge
-          Icon=iqforge
-          Type=Application
-          Categories=Utility;
-          EOF
-          cp appimage-root/usr/share/applications/iqforge.desktop appimage-root/iqforge.desktop
-          mkdir -p appimage-root/usr/share/icons/hicolor/256x256/apps
-          cp assets/iqforge.png appimage-root/usr/share/icons/hicolor/256x256/apps/iqforge.png
-          cp assets/iqforge.png appimage-root/iqforge.png
-          ln -s usr/bin/iqforge appimage-root/AppRun
-          cp README.md appimage-root/usr/share/doc/iqforge/README
-          ./appimagetool-x86_64.AppImage --appimage-extract-and-run appimage-root dist-appimage/iqforge.AppImage
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: iqforge-linux-x86_64
-          path: build/src/iqforge
-
-      - name: Upload Debian package
-        uses: actions/upload-artifact@v4
-        with:
-          name: iqforge-deb-x86_64
-          path: ./*.deb
-
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: iqforge-appimage-x86_64
-          path: dist-appimage/*.AppImage
-
-  release:
-    needs: build-linux-x86_64
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: iqforge-linux-x86_64
-          path: dist
-
-      - name: Download Debian package
-        uses: actions/download-artifact@v4
-        with:
-          name: iqforge-deb-x86_64
-          path: dist-deb
-
-      - name: Download AppImage
-        uses: actions/download-artifact@v4
-        with:
-          name: iqforge-appimage-x86_64
-          path: dist-appimage
-
-      - name: Rename binary
-        run: mv dist/iqforge dist/iqforge-linux-x86_64
-
-      - name: Prepare package files
-        run: |
-          cp dist-deb/*.deb dist/
-          cp dist-appimage/*.AppImage dist/
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/iqforge-linux-x86_64
-            dist/*.deb
-            dist/*.AppImage
-
   build-windows:
     runs-on: windows-latest
     steps:
@@ -146,7 +37,7 @@ jobs:
           name: iqforge-windows-x86_64
           path: build/Release/iqforge.exe
 
-  release-win:
+  release:
     needs: build-windows
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
