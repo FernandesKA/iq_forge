@@ -91,7 +91,7 @@ jobs:
         uses: johnwason/vcpkg-action@v6
         id: vcpkg
         with:
-          pkgs: glfw3 gl3w libiio hackrf fftw3
+          pkgs: glfw3 gl3w fftw3 libusb
           triplet: x64-windows
           token: ${{ github.token }}
 
