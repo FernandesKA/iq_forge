@@ -146,6 +146,17 @@ install(FILES README.md
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
+if(WIN32)
+  # The CI workflow copies all runtime DLLs (vcpkg deps, libiio, hackrf) next
+  # to iqforge.exe in the build tree after building; install/CPack picks up
+  # whatever is there at packaging time so it doesn't need to know their
+  # individual source locations.
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/src/
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    FILES_MATCHING PATTERN "*.dll"
+  )
+endif()
+
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VENDOR "iqforge")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SDR signal capture/transmit GUI")
@@ -158,6 +169,17 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+
+set(CPACK_NSIS_PACKAGE_NAME "iqforge")
+set(CPACK_NSIS_DISPLAY_NAME "iqforge")
+set(CPACK_NSIS_MUI_ICON "${PROJECT_SOURCE_DIR}/assets/iqforge.ico")
+set(CPACK_NSIS_MUI_UNIICON "${PROJECT_SOURCE_DIR}/assets/iqforge.ico")
+set(CPACK_NSIS_INSTALLED_ICON_NAME "bin\\\\iqforge.exe")
+set(CPACK_NSIS_CONTACT "${CPACK_PACKAGE_CONTACT}")
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+set(CPACK_NSIS_MODIFY_PATH ON)
+set(CPACK_PACKAGE_EXECUTABLES "iqforge" "iqforge")
+set(CPACK_CREATE_DESKTOP_LINKS "iqforge")
 
 include(CPack)
 

@@ -83,6 +83,7 @@ jobs:
           choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
           choco install ninja
           choco install pkgconfiglite
+          choco install nsis
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -122,6 +123,15 @@ jobs:
             build/src/iqforge.exe
             build/src/*.dll
 
+      - name: Create Windows installer
+        run: cpack --config build/CPackConfig.cmake -G NSIS
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqforge-windows-installer
+          path: iqforge-*-win64.exe
+
   release:
     needs: [build-linux-x86_64, build-windows]
     if: startsWith(github.ref, 'refs/tags/v')
@@ -153,12 +163,19 @@ jobs:
           name: iqforge-windows-x86_64
           path: dist-windows
 
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-windows-installer
+          path: dist-windows-installer
+
       - name: Prepare release files
         run: |
           mv dist/iqforge dist/iqforge-linux-x86_64
           cp dist-deb/*.deb dist/
           cp dist-appimage/*.AppImage dist/
           (cd dist-windows && zip -r ../dist/iqforge-windows-x86_64.zip .)
+          cp dist-windows-installer/*.exe dist/
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -168,3 +185,4 @@ jobs:
             dist/*.deb
             dist/*.AppImage
             dist/iqforge-windows-x86_64.zip
+            dist/*-win64.exe
