@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
@@ -29,61 +30,34 @@ void drawDevicePanel(AppState& state) {
   ImGui::Begin("Device");
 
   bool connected = state.deviceManager.isConnected();
+
   ImGui::BeginDisabled(connected);
-  {
-    int kind = static_cast<int>(state.selectedKind);
-    if (ImGui::RadioButton("PlutoSDR", kind == 0) && kind != 0) {
-      state.selectedKind = DeviceKind::PlutoSDR;
-      state.txGainDb = kMinAtten;
-      state.rxGainDb = kZero;
-    }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("HackRF", kind == 1) && kind != 1) {
-      state.selectedKind = DeviceKind::HackRF;
-      state.txGainDb = kZero;
-      state.rxGainDb = kZero;
-    }
-
-    ImGui::InputText("URI / Serial", state.uriBuffer, sizeof(state.uriBuffer));
-    ImGui::TextDisabled("%s", kUriHint(state.selectedKind));
-
-    if (ImGui::Button("Scan")) {
-      state.scanResults = state.selectedKind == DeviceKind::PlutoSDR ? scanPlutoDevices() : scanHackrfDevices();
-      state.log("Scan found " + std::to_string(state.scanResults.size()) + " device(s)");
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled(state.selectedKind == DeviceKind::PlutoSDR
-                             ? "Probes USB and the network (mDNS), like SDR++'s device list"
-                             : "Lists HackRF units currently attached via USB");
-
-    for (const auto& d : state.scanResults) {
-      ImGui::PushID(d.uri.c_str());
-      if (ImGui::Selectable(d.description.c_str())) {
-        std::snprintf(state.uriBuffer, sizeof(state.uriBuffer), "%s", d.uri.c_str());
-      }
-      ImGui::PopID();
-    }
+  int kind = static_cast<int>(state.selectedKind);
+  if (ImGui::RadioButton("PlutoSDR", kind == 0) && kind != 0) {
+    state.selectedKind = DeviceKind::PlutoSDR;
+    state.txGainDb = kMinAtten;
+    state.rxGainDb = kZero;
   }
+  ImGui::SameLine();
+  if (ImGui::RadioButton("HackRF", kind == 1) && kind != 1) {
+    state.selectedKind = DeviceKind::HackRF;
+    state.txGainDb = kZero;
+    state.rxGainDb = kZero;
+  }
+
+  ImGui::InputText("URI / Serial", state.uriBuffer, sizeof(state.uriBuffer));
+  ImGui::TextDisabled("%s", kUriHint(state.selectedKind));
   ImGui::EndDisabled();
 
-  ImGui::Separator();
-
-  bool changed = false;
-  changed |= FrequencyInputHz("Sample rate", &state.sampleRateHz, &state.sampleRateUnit);
-  changed |= FrequencyInputHz("Center freq", &state.centerFreqHz, &state.centerFreqUnit);
-  changed |= FrequencyInputHz("Bandwidth", &state.bandwidthHz, &state.bandwidthUnit);
-
-  bool txGainChanged = ImGui::SliderScalar(
-      state.selectedKind == DeviceKind::HackRF ? "TX VGA gain (dB)" : "TX attenuation (dB)",
-      ImGuiDataType_Double, &state.txGainDb,
-      state.selectedKind == DeviceKind::HackRF ? &kZero : &kMinAtten,
-      state.selectedKind == DeviceKind::HackRF ? &kHackrfTxMax : &kZero, "%.2f");
-  bool rxGainChanged = ImGui::SliderScalar(
-      "RX gain (dB)", ImGuiDataType_Double, &state.rxGainDb, &kZero,
-      state.selectedKind == DeviceKind::HackRF ? &kHackrfRxMax : &kPlutoRxMax, "%.2f");
-
-  ImGui::Separator();
-
+  // Connect/Disconnect deliberately sits right here, immediately after the
+  // fields that identify which device to connect to -- *before* Scan and
+  // the frequency/gain controls below, so a long scan result list (or the
+  // dock simply being sized for a shorter idle panel) can never push it
+  // out of view (https://github.com/FernandesKA/iq_forge/issues/9). Its
+  // logic doesn't depend on the widgets drawn after it: Connect reads
+  // state.sampleRateHz/etc. directly, and the "already connected" live
+  // push of changed frequency/gain further down runs independently of
+  // where this button is drawn.
   if (!connected) {
     if (ImGui::Button("Connect")) {
       DeviceConfig cfg;
@@ -111,20 +85,64 @@ void drawDevicePanel(AppState& state) {
       state.deviceManager.disconnect();
       state.log("Disconnected");
     }
-
-    if (connected && changed) {
-      IDevice* dev = state.deviceManager.device();
-      if (!dev->setSampleRate(state.sampleRateHz)) state.log("Sample rate rejected by device");
-      if (!dev->setFrequency(state.centerFreqHz)) state.log("Center frequency rejected by device");
-      if (!dev->setBandwidth(state.bandwidthHz)) state.log("Bandwidth rejected by device");
-    }
-    if (connected && txGainChanged) state.deviceManager.device()->setTxGain(state.txGainDb);
-    if (connected && rxGainChanged) state.deviceManager.device()->setRxGain(state.rxGainDb);
   }
-
   if (!state.connectError.empty() && !connected) {
     ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s", state.connectError.c_str());
   }
+
+  ImGui::Separator();
+
+  ImGui::BeginDisabled(connected);
+  if (ImGui::Button("Scan")) {
+    state.scanResults = state.selectedKind == DeviceKind::PlutoSDR ? scanPlutoDevices() : scanHackrfDevices();
+    state.log("Scan found " + std::to_string(state.scanResults.size()) + " device(s)");
+  }
+  ImGui::SameLine();
+  ImGui::TextDisabled(state.selectedKind == DeviceKind::PlutoSDR
+                           ? "Probes USB and the network (mDNS), like SDR++'s device list"
+                           : "Lists HackRF units currently attached via USB");
+
+  // Capped and independently scrollable so a long scan result list (many
+  // PlutoSDRs on the network, several HackRF units, etc.) can't push the
+  // rest of the panel down indefinitely.
+  if (!state.scanResults.empty()) {
+    float listHeight = ImGui::GetTextLineHeightWithSpacing() * std::min<float>(state.scanResults.size(), 4.5f);
+    ImGui::BeginChild("ScanResults", ImVec2(0.0f, listHeight), ImGuiChildFlags_Border);
+    for (const auto& d : state.scanResults) {
+      ImGui::PushID(d.uri.c_str());
+      if (ImGui::Selectable(d.description.c_str())) {
+        std::snprintf(state.uriBuffer, sizeof(state.uriBuffer), "%s", d.uri.c_str());
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndChild();
+  }
+  ImGui::EndDisabled();
+
+  ImGui::Separator();
+
+  bool changed = false;
+  changed |= FrequencyInputHz("Sample rate", &state.sampleRateHz, &state.sampleRateUnit);
+  changed |= FrequencyInputHz("Center freq", &state.centerFreqHz, &state.centerFreqUnit);
+  changed |= FrequencyInputHz("Bandwidth", &state.bandwidthHz, &state.bandwidthUnit);
+
+  bool txGainChanged = ImGui::SliderScalar(
+      state.selectedKind == DeviceKind::HackRF ? "TX VGA gain (dB)" : "TX attenuation (dB)",
+      ImGuiDataType_Double, &state.txGainDb,
+      state.selectedKind == DeviceKind::HackRF ? &kZero : &kMinAtten,
+      state.selectedKind == DeviceKind::HackRF ? &kHackrfTxMax : &kZero, "%.2f");
+  bool rxGainChanged = ImGui::SliderScalar(
+      "RX gain (dB)", ImGuiDataType_Double, &state.rxGainDb, &kZero,
+      state.selectedKind == DeviceKind::HackRF ? &kHackrfRxMax : &kPlutoRxMax, "%.2f");
+
+  if (connected && changed) {
+    IDevice* dev = state.deviceManager.device();
+    if (!dev->setSampleRate(state.sampleRateHz)) state.log("Sample rate rejected by device");
+    if (!dev->setFrequency(state.centerFreqHz)) state.log("Center frequency rejected by device");
+    if (!dev->setBandwidth(state.bandwidthHz)) state.log("Bandwidth rejected by device");
+  }
+  if (connected && txGainChanged) state.deviceManager.device()->setTxGain(state.txGainDb);
+  if (connected && rxGainChanged) state.deviceManager.device()->setRxGain(state.rxGainDb);
 
   ImGui::End();
 }
