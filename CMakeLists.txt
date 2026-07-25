@@ -137,6 +137,16 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_MakeAvailable(libsamplerate)
 unset(CMAKE_POLICY_VERSION_MINIMUM)
 
+# Used to read/write SigMF (.sigmf-meta) sidecar metadata (see src/dsp/iq_file.h).
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.12.0
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(json)
+
 add_subdirectory(src)
 
 install(TARGETS iqforge

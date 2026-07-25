@@ -15,6 +15,7 @@ target_link_libraries(iqforge_core PUBLIC
   PkgConfig::FFTW3F
   Threads::Threads
   samplerate
+  nlohmann_json::nlohmann_json
 )
 
 add_executable(iqforge

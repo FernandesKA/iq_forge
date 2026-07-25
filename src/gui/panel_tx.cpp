@@ -6,6 +6,7 @@
 #include <cmath>
 #include <memory>
 
+#include "../dsp/iq_file.h"
 #include "../dsp/resampler.h"
 #include "duration_input.h"
 #include "file_browser.h"
@@ -181,7 +182,8 @@ void drawTxPanel(AppState& state) {
     ImGui::SameLine();
     bool browseClicked = ImGui::Button("Browse...");
     ImGui::Checkbox("Loop", &state.fileLoop);
-    ImGui::TextDisabled("Formats: .cf32/.fc32 (float32 IQ), .ci16/.sc16 (int16 IQ), .wav (PCM16)");
+    ImGui::TextDisabled(
+        "Formats: .cf32/.fc32 (float32 IQ), .ci16/.sc16 (int16 IQ), .wav (PCM16), .sigmf-data/.sigmf-meta (SigMF)");
 
     // Raw IQ files don't carry their own sample rate, so resampling needs
     // the user to say what the file was actually recorded at. Each control
@@ -212,7 +214,18 @@ void drawTxPanel(AppState& state) {
 
     if (ImGui::Button("Load")) {
       try {
-        SampleBuffer raw = loadIqFile(state.filePathBuffer);
+        auto [raw, sigmf] = loadIqFileWithSigmf(state.filePathBuffer);
+        state.fileSigmfInfo = sigmf;
+        if (sigmf && sigmf->hasSampleRate) {
+          // Raw .cf32/.ci16 have no way to carry their own sample rate, so
+          // normally the user has to type it in manually (see
+          // fileSourceRateHz's declaration); a SigMF sidecar supplies it
+          // directly. Center frequency is intentionally *not* auto-applied
+          // here -- see the "Apply to device" button below, since silently
+          // retuning connected hardware from a file load would be surprising.
+          state.fileSourceRateHz = sigmf->sampleRateHz;
+          state.log("SigMF: recovered sample rate " + formatHz(sigmf->sampleRateHz));
+        }
         SampleBuffer ready;
         if (state.fileResampleEnabled) {
           double targetRateHz = state.fileSourceRateHz * state.fileResampleCoefficient;
@@ -235,6 +248,7 @@ void drawTxPanel(AppState& state) {
         state.fileLoadError = e.what();
         state.fileSource.reset();
         state.fileLoadedPath.clear();
+        state.fileSigmfInfo.reset();
         state.log("IQ file load failed: " + state.fileLoadError);
       }
     }
@@ -245,6 +259,33 @@ void drawTxPanel(AppState& state) {
     ImGui::PushTextWrapPos(0.0f);
     if (loaded) {
       ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Loaded: %zu samples", state.fileSource->totalSamples());
+      if (state.fileSigmfInfo) {
+        const SigmfMeta& meta = *state.fileSigmfInfo;
+        if (!meta.hw.empty()) ImGui::TextDisabled("SigMF hw: %s", meta.hw.c_str());
+        if (!meta.description.empty()) ImGui::TextDisabled("SigMF description: %s", meta.description.c_str());
+        if (!meta.captures.empty() && meta.captures.front().hasFrequency) {
+          double freqHz = meta.captures.front().frequencyHz;
+          ImGui::TextDisabled("SigMF center freq: %s", formatHz(freqHz).c_str());
+          ImGui::SameLine();
+          if (ImGui::SmallButton("Apply to device")) {
+            state.centerFreqHz = freqHz;
+            IDevice* dev = state.deviceManager.device();
+            if (dev && !dev->setFrequency(freqHz)) {
+              state.log("Apply SigMF center freq: rejected by device");
+            } else {
+              state.log("Apply SigMF center freq: " + formatHz(freqHz) + (dev ? " (tuned)" : " (no device connected)"));
+            }
+          }
+        }
+        if (!meta.annotations.empty()) {
+          ImGui::TextDisabled("SigMF annotations (%zu):", meta.annotations.size());
+          for (const auto& ann : meta.annotations) {
+            ImGui::BulletText("sample %llu (%llu samples)%s%s", static_cast<unsigned long long>(ann.sampleStart),
+                               static_cast<unsigned long long>(ann.sampleCount), ann.label.empty() ? "" : "  ",
+                               ann.label.c_str());
+          }
+        }
+      }
     } else if (!state.fileLoadError.empty()) {
       ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s", state.fileLoadError.c_str());
     } else {

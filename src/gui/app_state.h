@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -66,6 +68,12 @@ struct AppState {
   double fileResampleCoefficient = 1.0;
   std::string fileLoadedPath; // path fileSource below was actually loaded from, "" if none/stale
   std::string fileLoadError;
+  // Set by Load whenever fileLoadedPath was a SigMF Recording (.sigmf-data/
+  // .sigmf-meta) -- carries the sample rate/frequency/annotations recovered
+  // from the sidecar for display, since a bare .cf32/.ci16 has no way to
+  // store any of that. fileSourceRateHz above is already auto-filled from
+  // this at Load time; nullopt for a plain .cf32/.ci16/.wav file.
+  std::optional<SigmfMeta> fileSigmfInfo;
   // Shared by the idle preview in updateDisplays() and "Start TX" -- Start
   // TX just hands this same instance to the device, so playback continues
   // from wherever the preview's read position left off instead of jumping
@@ -100,8 +108,26 @@ struct AppState {
   bool rxFrozen = false;
 
   bool rxRecording = false;
-  char rxRecordPathBuffer[512] = "recording.cf32";
+  // SigMF is the default: unlike raw Cf32Raw, it records sample rate, center
+  // frequency, recording hardware, and annotations alongside the samples
+  // (see saveSigmf() in iq_file.h) instead of losing all of that on save.
+  enum class RxSaveFormat { Sigmf, Cf32Raw };
+  RxSaveFormat rxSaveFormat = RxSaveFormat::Sigmf;
+  char rxRecordPathBuffer[512] = "recording.sigmf-data";
+  char rxRecordDescriptionBuffer[256] = ""; // optional SigMF core:description
   std::vector<Sample> rxRecordBuffer;
+
+  // Events the user flags while recording ("Mark now"), turned into SigMF
+  // core:annotations on save. Sample offsets are relative to the start of
+  // rxRecordBuffer, so they're only meaningful until it's cleared (Save &
+  // clear resets both together).
+  struct RxAnnotation {
+    uint64_t sampleStart = 0;
+    uint64_t sampleCount = 1;
+    std::string label;
+  };
+  std::vector<RxAnnotation> rxRecordAnnotations;
+  char rxAnnotationLabelBuffer[128] = "";
 
   bool isRxActive() const {
     return deviceManager.device() && deviceManager.device()->isRxRunning();
