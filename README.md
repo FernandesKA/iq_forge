@@ -101,20 +101,12 @@ Raw-форматы (`.cf32`/`.ci16`) не хранят частоту дискр
 
 ## Сборка
 
-Репозиторий содержит git-сабмодуль (`third_party/libsamplerate`), поэтому при первом клоне:
-
-```sh
-git submodule update --init --recursive
-```
-
-Дальше как обычно:
-
 ```sh
 cmake -B build
 cmake --build build
 ```
 
-Требуются пакеты: GLFW, OpenGL, libiio, fftw3f и libhackrf. `imgui`, `implot` и `libsamplerate` подтягиваются сами (FetchContent/сабмодуль).
+Требуются пакеты: GLFW, OpenGL, libiio, fftw3f и libhackrf. `imgui`, `implot` и `libsamplerate` подтягиваются сами через FetchContent.
 
 ## Запуск тестов
 
