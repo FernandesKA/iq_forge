@@ -130,7 +130,12 @@ FetchContent_Declare(
   GIT_TAG 0.2.2
   GIT_SHALLOW TRUE
 )
+# libsamplerate's own CMakeLists.txt declares cmake_minimum_required(VERSION
+# 3.1...), and CMake >= 4.0 hard-errors on that instead of just warning.
+# Widen what we accept for this one dependency rather than patching its file.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_MakeAvailable(libsamplerate)
+unset(CMAKE_POLICY_VERSION_MINIMUM)
 
 add_subdirectory(src)
 
