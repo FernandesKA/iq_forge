@@ -8,6 +8,34 @@ namespace iqforge {
 
 namespace {
 constexpr double kTwoPi = 6.283185307179586476925286766559;
+constexpr double kPi = kTwoPi / 2.0;
+
+// Gain of the envelope shape at tMod within an active [0, duration) window,
+// 0 outside it. u is the normalized position across the window (0..1).
+double envelopeGain(double tMod, double duration, EnvelopeShape shape) {
+  if (duration <= 0.0 || tMod < 0.0 || tMod >= duration) return 0.0;
+  const double u = tMod / duration;
+  switch (shape) {
+    case EnvelopeShape::Rectangular:
+      return 1.0;
+    case EnvelopeShape::Hann:
+      return 0.5 - 0.5 * std::cos(kTwoPi * u);
+    case EnvelopeShape::Sinc: {
+      // 3 sidelobes on each side; x is 0 at the window center and +-3 at its
+      // edges, where sin(x) naturally reaches zero -- no discontinuity.
+      constexpr double kSideLobes = 3.0;
+      const double x = (u - 0.5) * 2.0 * kSideLobes;
+      return x == 0.0 ? 1.0 : std::sin(kPi * x) / (kPi * x);
+    }
+    case EnvelopeShape::Gaussian: {
+      // sigma chosen so the window edges sit at +-3 sigma (~0.011 gain).
+      constexpr double kSigma = 1.0 / 6.0;
+      const double x = (u - 0.5) / kSigma;
+      return std::exp(-0.5 * x * x);
+    }
+  }
+  return 1.0;
+}
 
 double wrapPhase(double phase) {
   phase = std::fmod(phase, kTwoPi);
@@ -96,8 +124,8 @@ size_t SignalGenerator::generate(Sample* out, size_t count) {
   }
 
   // Pulse always gates itself; any other waveform can opt into the same
-  // rectangular envelope to turn it into a pulsed signal (e.g. a pulsed
-  // chirp for radar-style testing).
+  // shaped envelope to turn it into a pulsed signal (e.g. a pulsed chirp
+  // for radar-style testing).
   if (cfg.type == WaveformType::Pulse || cfg.envelopeEnabled) {
     applyEnvelope(out, count, cfg);
   }
@@ -150,7 +178,7 @@ void SignalGenerator::generateChirp(Sample* out, size_t count, const GeneratorCo
 }
 
 void SignalGenerator::generatePulse(Sample* out, size_t count, const GeneratorConfig& cfg) {
-  // The rectangular gating itself is applied uniformly afterwards by
+  // The gating/shaping itself is applied uniformly afterwards by
   // applyEnvelope(); the "fill" for a bare pulse is just a constant (real)
   // carrier at 0 Hz baseband.
   std::fill(out, out + count, Sample(cfg.amplitude, 0.0f));
@@ -164,7 +192,7 @@ void SignalGenerator::applyEnvelope(Sample* out, size_t count, const GeneratorCo
   double t = envelopeTime_;
   for (size_t i = 0; i < count; ++i) {
     const double tMod = std::fmod(t, period);
-    if (tMod >= duration) out[i] = Sample(0.0f, 0.0f);
+    out[i] *= static_cast<float>(envelopeGain(tMod, duration, cfg.envelopeShape));
     t += dt;
   }
   envelopeTime_ = std::fmod(t, period);

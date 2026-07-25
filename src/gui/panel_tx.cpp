@@ -16,6 +16,7 @@ namespace iqforge {
 
 namespace {
 const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Pulse", "Barker", "Noise", "Ramp"};
+const char* kEnvelopeShapeNames[] = {"Rectangular", "Sinc (sin(x)/x)", "Gaussian", "Hann"};
 const char* kBarkerCodeNames[] = {
     "B2  [+ -]",       "B2  [+ +]",       "B3  [+ + -]",
     "B4  [+ + - +]",   "B4  [+ + + -]",   "B5  [+ + + - +]",
@@ -55,6 +56,21 @@ bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
     cfg.pulseDurationSec = clampedPulseDuration;
     changed = true;
   }
+  return changed;
+}
+
+// Shared by the Pulse waveform (which always gates itself) and the "Pulse
+// envelope" option on other waveforms -- both configure the same
+// shape/duration/period fields.
+bool drawEnvelopeShapeAndTiming(AppState& state) {
+  bool changed = false;
+  int shape = static_cast<int>(state.genConfig.envelopeShape);
+  if (ImGui::Combo("Envelope shape", &shape, kEnvelopeShapeNames, IM_ARRAYSIZE(kEnvelopeShapeNames))) {
+    state.genConfig.envelopeShape = static_cast<EnvelopeShape>(shape);
+    changed = true;
+  }
+  changed |= DurationInputSec("Pulse duration", &state.genConfig.pulseDurationSec, &state.pulseDurationUnit);
+  changed |= DurationInputSec("Pulse period", &state.genConfig.pulsePeriodSec, &state.pulsePeriodUnit);
   return changed;
 }
 }
@@ -111,10 +127,7 @@ void drawTxPanel(AppState& state) {
             "Sweep duration", &state.genConfig.chirpDurationSec, &state.chirpDurationUnit);
         break;
       case WaveformType::Pulse:
-        generatorChanged |= DurationInputSec(
-            "Pulse duration", &state.genConfig.pulseDurationSec, &state.pulseDurationUnit);
-        generatorChanged |= DurationInputSec(
-            "Pulse period", &state.genConfig.pulsePeriodSec, &state.pulsePeriodUnit);
+        generatorChanged |= drawEnvelopeShapeAndTiming(state);
         break;
       case WaveformType::Barker: {
         int code = static_cast<int>(state.genConfig.barkerCode);
@@ -131,16 +144,13 @@ void drawTxPanel(AppState& state) {
         break;
     }
 
-    // Any non-Pulse waveform can optionally be gated by the same rectangular
+    // Any non-Pulse waveform can optionally be gated by the same shaped
     // envelope Pulse uses on its own, turning it into a pulsed signal (e.g.
     // a pulsed chirp for radar-style testing).
     if (state.genConfig.type != WaveformType::Pulse) {
       generatorChanged |= ImGui::Checkbox("Pulse envelope", &state.genConfig.envelopeEnabled);
       if (state.genConfig.envelopeEnabled) {
-        generatorChanged |= DurationInputSec(
-            "Pulse duration", &state.genConfig.pulseDurationSec, &state.pulseDurationUnit);
-        generatorChanged |= DurationInputSec(
-            "Pulse period", &state.genConfig.pulsePeriodSec, &state.pulsePeriodUnit);
+        generatorChanged |= drawEnvelopeShapeAndTiming(state);
       }
     }
 

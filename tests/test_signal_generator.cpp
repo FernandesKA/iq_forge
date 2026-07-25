@@ -303,4 +303,30 @@ void run_signal_generator_tests() {
       }
     }
   }
+
+  // Shaped envelopes (Sinc/Gaussian/Hann): still 0 outside [0, duration) like
+  // Rectangular, but peak at the window center and taper towards its edges
+  // instead of switching abruptly.
+  {
+    for (EnvelopeShape shape : {EnvelopeShape::Sinc, EnvelopeShape::Gaussian, EnvelopeShape::Hann}) {
+      GeneratorConfig cfg;
+      cfg.type = WaveformType::Pulse;
+      cfg.sampleRateHz = sampleRate;
+      cfg.pulseDurationSec = 20e-6; // 20 samples on
+      cfg.pulsePeriodSec = 40e-6;   // 20 off
+      cfg.envelopeShape = shape;
+      cfg.amplitude = 1.0f;
+      SignalGenerator gen(cfg);
+
+      std::vector<Sample> buf(40);
+      gen.generate(buf.data(), buf.size());
+
+      CHECK(std::abs(buf[10].real()) > 0.9f); // window center (sample 10 of 20): near full amplitude
+      CHECK(std::abs(buf[0].real()) < std::abs(buf[10].real())); // tapered at the window's start edge
+      for (size_t i = 20; i < 30; ++i) {
+        CHECK(buf[i].real() == 0.0f); // still silent outside the window
+        CHECK(buf[i].imag() == 0.0f);
+      }
+    }
+  }
 }

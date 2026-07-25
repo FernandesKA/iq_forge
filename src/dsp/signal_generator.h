@@ -18,6 +18,17 @@ enum class WaveformType {
   Ramp,
 };
 
+// Shape of the pulse/envelope gate applied over [0, pulseDurationSec) of
+// every pulsePeriodSec (see GeneratorConfig below). Rectangular is a hard
+// on/off gate; the others taper to 0 at both edges of the window, which
+// narrows the transmitted spectrum's sidelobes compared to a rectangle.
+enum class EnvelopeShape {
+  Rectangular,
+  Sinc,     // sin(x)/x main lobe plus a few sidelobes, zero at both edges
+  Gaussian,
+  Hann,     // raised cosine, same shape as the FFT window of the same name
+};
+
 // All Barker sequences, excluding variants obtainable only by negation or
 // reversal. Lengths 2 and 4 each have two distinct sequences.
 enum class BarkerCode {
@@ -52,12 +63,13 @@ struct GeneratorConfig {
   BarkerCode barkerCode = BarkerCode::B13;
   double barkerChipRateHz = 100e3;
 
-  // Pulse: a rectangular constant-amplitude (real) carrier gated on for
-  // pulseDurationSec out of every pulsePeriodSec, then repeats. The same two
-  // fields also drive the envelope below, so pulse timing is configured in
-  // one place regardless of how it's applied.
+  // Pulse: a constant-amplitude (real) carrier gated on for pulseDurationSec
+  // out of every pulsePeriodSec, then repeats, shaped by envelopeShape. The
+  // same fields also drive the envelope below, so pulse timing/shape is
+  // configured in one place regardless of how it's applied.
   double pulseDurationSec = 10e-6;
   double pulsePeriodSec = 100e-6;
+  EnvelopeShape envelopeShape = EnvelopeShape::Rectangular;
 
   // Envelope: gates any *other* waveform type on/off using the pulse timing
   // above, e.g. turning a chirp into a pulsed LFM radar signal. Ignored for
