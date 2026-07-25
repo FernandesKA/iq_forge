@@ -6,8 +6,8 @@
 #include <cmath>
 #include <memory>
 
-#include "../dsp/iq_file.h"
-#include "../dsp/resampler.h"
+#include "iq_file.h"
+#include "resampler.h"
 #include "duration_input.h"
 #include "file_browser.h"
 #include "freq_input.h"

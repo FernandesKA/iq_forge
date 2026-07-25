@@ -7,6 +7,5 @@ add_executable(iqforge_tests
   test_resampler.cpp
 )
 target_link_libraries(iqforge_tests PRIVATE iqforge_core)
-target_include_directories(iqforge_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 add_test(NAME iqforge_tests COMMAND iqforge_tests)

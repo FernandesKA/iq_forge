@@ -4,7 +4,7 @@
 #include <deque>
 #include <vector>
 
-#include "../core/sample_types.h"
+#include "sample_types.h"
 #include "plot_zoom_controls.h"
 
 namespace iqforge {

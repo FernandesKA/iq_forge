@@ -1,6 +1,6 @@
 #include <thread>
 
-#include "../src/core/ring_buffer.h"
+#include "ring_buffer.h"
 #include "test_framework.h"
 
 using iqforge::RingBuffer;

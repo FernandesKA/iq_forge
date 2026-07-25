@@ -1,6 +1,6 @@
 #include <cmath>
 
-#include "../src/dsp/resampler.h"
+#include "resampler.h"
 #include "test_framework.h"
 
 using namespace iqforge;

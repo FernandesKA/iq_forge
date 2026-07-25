@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "../core/sample_source.h"
+#include "sample_source.h"
 
 namespace iqforge {
 

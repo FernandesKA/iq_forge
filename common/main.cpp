@@ -1,6 +1,6 @@
 #include <cstdio>
 
-#include "gui/app.h"
+#include "app.h"
 
 int main() {
   iqforge::App app;

@@ -7,14 +7,14 @@
 #include <string>
 #include <vector>
 
-#include "../core/ring_buffer.h"
-#include "../core/sample_types.h"
-#include "../core/tee_sample_source.h"
-#include "../devices/device_manager.h"
-#include "../devices/device_scanner.h"
-#include "../dsp/fft_processor.h"
-#include "../dsp/iq_file.h"
-#include "../dsp/signal_generator.h"
+#include "ring_buffer.h"
+#include "sample_types.h"
+#include "tee_sample_source.h"
+#include "device_manager.h"
+#include "device_scanner.h"
+#include "fft_processor.h"
+#include "iq_file.h"
+#include "signal_generator.h"
 #include "duration_input.h"
 #include "freq_input.h"
 #include "waterfall_row.h"

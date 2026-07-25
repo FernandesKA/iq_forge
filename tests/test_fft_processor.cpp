@@ -2,7 +2,7 @@
 #include <cmath>
 #include <vector>
 
-#include "../src/dsp/fft_processor.h"
+#include "fft_processor.h"
 #include "test_framework.h"
 
 using namespace iqforge;

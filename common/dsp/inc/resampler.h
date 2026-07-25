@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/sample_types.h"
+#include "sample_types.h"
 
 namespace iqforge {
 

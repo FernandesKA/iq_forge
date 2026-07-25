@@ -147,7 +147,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-add_subdirectory(src)
+add_subdirectory(common)
 
 install(TARGETS iqforge
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -161,7 +161,7 @@ if(WIN32)
   # to iqforge.exe in the build tree after building; install/CPack picks up
   # whatever is there at packaging time so it doesn't need to know their
   # individual source locations.
-  install(DIRECTORY ${CMAKE_BINARY_DIR}/src/
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/common/
     DESTINATION ${CMAKE_INSTALL_BINDIR}
     FILES_MATCHING PATTERN "*.dll"
   )

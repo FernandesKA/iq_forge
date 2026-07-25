@@ -2,8 +2,8 @@
 
 #include <imgui.h>
 
-#include "../devices/i_device.h"
-#include "../dsp/iq_file.h"
+#include "i_device.h"
+#include "iq_file.h"
 
 namespace iqforge {
 

@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "../core/sample_types.h"
+#include "sample_types.h"
 #include "plot_line_view.h"
 #include "plot_trigger.h"
 

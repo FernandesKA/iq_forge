@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir -p dist-appimage
           mkdir -p appimage-root/usr/bin
-          cp build/src/iqforge appimage-root/usr/bin/iqforge
+          cp build/common/iqforge appimage-root/usr/bin/iqforge
           mkdir -p appimage-root/usr/share/applications
           mkdir -p appimage-root/usr/share/doc/iqforge
           cat > appimage-root/usr/share/applications/iqforge.desktop <<'EOF'
@@ -59,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: iqforge-linux-x86_64
-          path: build/src/iqforge
+          path: build/common/iqforge
 
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
@@ -109,19 +109,19 @@ jobs:
 
       - name: Collect runtime DLLs
         run: |
-          Copy-Item "${{ github.workspace }}\vcpkg\installed\x64-windows\bin\*.dll" -Destination build\src
-          Copy-Item "build\_deps\libiio-prebuilt\Windows-VS-2022-x64\libiio.dll" -Destination build\src
-          Copy-Item "build\_deps\libiio-prebuilt\Windows-VS-2022-x64\libxml2.dll" -Destination build\src
-          Copy-Item "build\_deps\libiio-prebuilt\Windows-VS-2022-x64\libserialport-0.dll" -Destination build\src
-          Copy-Item "build\_deps\hackrf-build\src\hackrf.dll" -Destination build\src
+          Copy-Item "${{ github.workspace }}\vcpkg\installed\x64-windows\bin\*.dll" -Destination build\common
+          Copy-Item "build\_deps\libiio-prebuilt\Windows-VS-2022-x64\libiio.dll" -Destination build\common
+          Copy-Item "build\_deps\libiio-prebuilt\Windows-VS-2022-x64\libxml2.dll" -Destination build\common
+          Copy-Item "build\_deps\libiio-prebuilt\Windows-VS-2022-x64\libserialport-0.dll" -Destination build\common
+          Copy-Item "build\_deps\hackrf-build\src\hackrf.dll" -Destination build\common
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: iqforge-windows-x86_64
           path: |
-            build/src/iqforge.exe
-            build/src/*.dll
+            build/common/iqforge.exe
+            build/common/*.dll
 
       - name: Create Windows installer
         run: cpack --config build/CPackConfig.cmake -G NSIS

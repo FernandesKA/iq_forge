@@ -2,8 +2,8 @@
 #include <cmath>
 #include <vector>
 
-#include "../src/dsp/fft_processor.h"
-#include "../src/dsp/signal_generator.h"
+#include "fft_processor.h"
+#include "signal_generator.h"
 #include "test_framework.h"
 
 using namespace iqforge;

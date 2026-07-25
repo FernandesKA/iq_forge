@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "../core/sample_source.h"
+#include "sample_source.h"
 
 namespace iqforge {
 

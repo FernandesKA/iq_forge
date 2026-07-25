@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <vector>
 
-#include "../src/dsp/iq_file.h"
+#include "iq_file.h"
 #include "test_framework.h"
 
 using namespace iqforge;

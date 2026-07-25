@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "../core/sample_types.h"
+#include "sample_types.h"
 
 namespace iqforge {
 
