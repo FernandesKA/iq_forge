@@ -196,7 +196,14 @@ if(IQFORGE_PACKAGE_VERSION)
   set(CPACK_PACKAGE_VERSION "${IQFORGE_PACKAGE_VERSION}")
 endif()
 
+# CPACK_PACKAGE_NAME stays lowercase (it feeds the .deb package name below,
+# which Debian policy requires to be lowercase, and the release filenames
+# the CI workflow globs for). CPACK_PACKAGE_INSTALL_DIRECTORY is what
+# actually shows up as the default install path / Start Menu folder on
+# Windows, so that -- along with the NSIS display strings and shortcut
+# label further down -- carries the "IqForge" branding instead.
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "IqForge")
 set(CPACK_PACKAGE_VENDOR "iqforge")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SDR signal capture/transmit GUI")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/FernandesKA/iq_forge")
@@ -209,15 +216,15 @@ set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
-set(CPACK_NSIS_PACKAGE_NAME "iqforge")
-set(CPACK_NSIS_DISPLAY_NAME "iqforge")
+set(CPACK_NSIS_PACKAGE_NAME "IqForge")
+set(CPACK_NSIS_DISPLAY_NAME "IqForge")
 set(CPACK_NSIS_MUI_ICON "${PROJECT_SOURCE_DIR}/assets/iqforge.ico")
 set(CPACK_NSIS_MUI_UNIICON "${PROJECT_SOURCE_DIR}/assets/iqforge.ico")
 set(CPACK_NSIS_INSTALLED_ICON_NAME "bin\\\\iqforge.exe")
 set(CPACK_NSIS_CONTACT "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
 set(CPACK_NSIS_MODIFY_PATH ON)
-set(CPACK_PACKAGE_EXECUTABLES "iqforge" "iqforge")
+set(CPACK_PACKAGE_EXECUTABLES "iqforge" "IqForge")
 set(CPACK_CREATE_DESKTOP_LINKS "iqforge")
 
 include(CPack)
