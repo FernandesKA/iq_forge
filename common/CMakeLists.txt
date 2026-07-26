@@ -59,6 +59,20 @@ add_executable(iqforge
 target_include_directories(iqforge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui/inc)
 target_link_libraries(iqforge PRIVATE iqforge_core implot imgui)
 
+if(WIN32)
+  # Without this, iqforge.exe links as a console-subsystem app, so launching
+  # it (e.g. via the Start Menu shortcut) pops up a cmd.exe-style console
+  # window alongside the GUI for no reason -- nothing in this app prints to
+  # a console. WIN32_EXECUTABLE switches the subsystem to GUI; MSVC then
+  # additionally needs the entry point pointed back at plain main()
+  # (mainCRTStartup) since /SUBSYSTEM:WINDOWS otherwise defaults to expecting
+  # WinMain, which main.cpp doesn't define.
+  set_target_properties(iqforge PROPERTIES WIN32_EXECUTABLE TRUE)
+  if(MSVC)
+    target_link_options(iqforge PRIVATE /ENTRY:mainCRTStartup)
+  endif()
+endif()
+
 install(TARGETS iqforge_core
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
