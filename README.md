@@ -156,3 +156,7 @@ cmake --build build
 ```sh
 cmake --build build --target test
 ```
+
+## Лицензия
+
+[GPL-3.0-or-later](LICENSE). Проект линкуется с [FFTW](https://www.fftw.org) (GPL-2.0-or-later, без исключения на линковку), поэтому распространяемые сборки в любом случае GPL-совместимы — GPL-3.0-or-later закрывает это явно.

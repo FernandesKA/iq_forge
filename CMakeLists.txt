@@ -158,7 +158,7 @@ add_subdirectory(common)
 install(TARGETS iqforge
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-install(FILES README.md
+install(FILES README.md LICENSE
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
@@ -208,6 +208,8 @@ set(CPACK_PACKAGE_VENDOR "iqforge")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SDR signal capture/transmit GUI")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/FernandesKA/iq_forge")
 set(CPACK_PACKAGE_CONTACT "FernandesKA <fernandezka.2601@gmail.com>")
+# Also makes the NSIS installer show a license-acceptance page.
+set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
 set(CPACK_DEBIAN_PACKAGE_NAME "iqforge")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "FernandesKA <fernandezka.2601@gmail.com>")
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "SDR signal capture/transmit GUI")
