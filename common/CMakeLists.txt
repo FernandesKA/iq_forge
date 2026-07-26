@@ -38,6 +38,8 @@ add_executable(iqforge
   main.cpp
   gui/src/app.cpp
   gui/src/app_state.cpp
+  gui/src/app_settings.cpp
+  gui/src/panel_settings.cpp
   gui/src/log_panel.cpp
   gui/src/freq_input.cpp
   gui/src/duration_input.cpp

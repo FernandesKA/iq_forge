@@ -9,9 +9,11 @@
 
 #include <cstdio>
 
+#include "app_settings.h"
 #include "log_panel.h"
 #include "panel_device.h"
 #include "panel_rx.h"
+#include "panel_settings.h"
 #include "panel_tx.h"
 #include "panel_visualization.h"
 #include "plot_zoom_controls.h"
@@ -45,6 +47,7 @@ void buildDefaultLayout(ImGuiID dockspaceId) {
   ImGui::DockBuilderDockWindow("TX", mainId);
   ImGui::DockBuilderDockWindow("RX", mainId);
   ImGui::DockBuilderDockWindow("Log", bottom);
+  ImGui::DockBuilderDockWindow("Settings", bottom);
 
   ImGui::DockBuilderFinish(dockspaceId);
 }
@@ -53,6 +56,7 @@ void buildDefaultLayout(ImGuiID dockspaceId) {
 App::App() = default;
 
 App::~App() {
+  saveSessionSettings(state_);
   state_.deviceManager.disconnect();
 
   if (window_) {
@@ -94,6 +98,8 @@ bool App::init() {
   ImGui_ImplGlfw_InitForOpenGL(window_, true);
   ImGui_ImplOpenGL3_Init(glslVersion);
 
+  loadSessionSettings(state_); // no-op if auto-save is disabled or no prior session exists
+
   return true;
 }
 
@@ -117,6 +123,7 @@ void App::run() {
     drawDevicePanel(state_);
     drawTxPanel(state_);
     drawRxPanel(state_);
+    drawSettingsPanel(state_);
     drawTxVisualizationPanel(state_);
     drawRxVisualizationPanel(state_);
     drawLogPanel(state_);
