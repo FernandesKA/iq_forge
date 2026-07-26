@@ -32,10 +32,13 @@ jobs:
           fi
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF -DIQFORGE_PACKAGE_VERSION=${{ steps.version.outputs.value }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=ON -DIQFORGE_PACKAGE_VERSION=${{ steps.version.outputs.value }}
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: Create Debian package
         run: cpack --config build/CPackConfig.cmake -G DEB
@@ -120,10 +123,13 @@ jobs:
         env:
           PKG_CONFIG_PATH: ${{ github.workspace }}\vcpkg\installed\x64-windows\lib\pkgconfig
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF -DIQFORGE_PACKAGE_VERSION=${{ steps.version.outputs.value }} ${{ steps.vcpkg.outputs.vcpkg-cmake-config }} -G Ninja
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=ON -DIQFORGE_PACKAGE_VERSION=${{ steps.version.outputs.value }} ${{ steps.vcpkg.outputs.vcpkg-cmake-config }} -G Ninja
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: Collect runtime DLLs
         run: |
