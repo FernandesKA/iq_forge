@@ -14,6 +14,7 @@
 #include "panel_device.h"
 #include "panel_rx.h"
 #include "panel_settings.h"
+#include "panel_spectrum_viewer.h"
 #include "panel_tx.h"
 #include "panel_visualization.h"
 #include "plot_zoom_controls.h"
@@ -46,6 +47,7 @@ void buildDefaultLayout(ImGuiID dockspaceId) {
   ImGui::DockBuilderDockWindow("RX Control", left);
   ImGui::DockBuilderDockWindow("TX", mainId);
   ImGui::DockBuilderDockWindow("RX", mainId);
+  ImGui::DockBuilderDockWindow("SpectrumViewer", mainId);
   ImGui::DockBuilderDockWindow("Log", bottom);
   ImGui::DockBuilderDockWindow("Settings", bottom);
 
@@ -126,6 +128,7 @@ void App::run() {
     drawSettingsPanel(state_);
     drawTxVisualizationPanel(state_);
     drawRxVisualizationPanel(state_);
+    drawSpectrumViewerPanel(state_);
     drawLogPanel(state_);
 
     ImGui::Render();

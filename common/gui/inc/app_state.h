@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -142,6 +143,54 @@ struct AppState {
   bool isRxActive() const {
     return deviceManager.device() && deviceManager.device()->isRxRunning();
   }
+
+  // --- SpectrumViewer (wideband sweep) ---
+  // A user-defined frequency range wider than the device can capture in one
+  // instantaneous acquisition. startFreqHz/endFreqHz are always the source
+  // of truth; editCenterSpan just picks which pair of fields the panel
+  // shows for editing (Start/End, or the equivalent Center/Span) -- entering
+  // one always recomputes the other, per-field units remembered
+  // independently like every other frequency input in the app.
+  struct SweepBand {
+    std::string name = "Band";
+    double startFreqHz = 100e6;
+    double endFreqHz = 200e6;
+    bool editCenterSpan = false;
+    FreqUnit startUnit = FreqUnit::MHz;
+    FreqUnit endUnit = FreqUnit::MHz;
+    FreqUnit centerUnit = FreqUnit::MHz;
+    FreqUnit spanUnit = FreqUnit::MHz;
+  };
+  // Session-only by design (not part of app_settings.h's persisted
+  // snapshot) -- these are ad hoc scan ranges, not durable configuration.
+  std::vector<SweepBand> sweepBands;
+  int selectedSweepBand = -1; // index into sweepBands, -1 = none selected
+
+  bool sweepRunning = false;
+  // Whether the sweep itself started RX (vs. it already being running when
+  // the sweep began) -- only stop RX on Stop sweep if the sweep is the one
+  // that started it, so it doesn't yank RX out from under the user.
+  bool sweepWeStartedRx = false;
+  double sweepRangeStartHz = 0.0; // locked in from the selected band when the sweep (re)starts a pass
+  double sweepRangeEndHz = 0.0;
+  double sweepStepHz = 0.0; // == sampleRateHz at the moment the sweep started
+  double sweepCurrentCenterHz = 0.0;
+  std::chrono::steady_clock::time_point sweepRetuneDeadline{};
+  // Composite spectrum across [sweepRangeStartHz, sweepRangeEndHz], one
+  // rxFft-sized segment per step, filled in in place as each step completes
+  // -- so it's visibly "filling in" during a sweep rather than only
+  // appearing once the whole range is done.
+  std::vector<float> sweepSpectrumDb;
+  std::string sweepStatus;
+
+  static constexpr double kSweepSettleSec = 0.2;
+
+  // Starts sweeping the selected band: retunes to its first step and lets
+  // updateSweep() (called from updateDisplays()) step through the rest.
+  // No-op if already running, nothing selected, or no device connected.
+  void startSweep();
+  void stopSweep();
+  void updateSweep();
 
   // --- Log ---
   std::mutex logMutex;

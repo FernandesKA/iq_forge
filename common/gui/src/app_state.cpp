@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 
 namespace iqforge {
 
@@ -120,6 +122,8 @@ void AppState::updateDisplays() {
   }
 
   if (gotTx) pushWaterfallRow(txWaterfallRows, txSpectrumDb, kWaterfallMaxRows);
+
+  updateSweep();
 }
 
 void AppState::setFftSize(int newSize) {
@@ -129,6 +133,91 @@ void AppState::setFftSize(int newSize) {
   rxFft.setFftSize(static_cast<size_t>(newSize));
   txWaterfallRows.clear();
   rxWaterfallRows.clear();
+}
+
+void AppState::startSweep() {
+  if (sweepRunning) return;
+  if (selectedSweepBand < 0 || selectedSweepBand >= static_cast<int>(sweepBands.size())) return;
+  IDevice* dev = deviceManager.device();
+  if (!dev) return;
+
+  const SweepBand& band = sweepBands[static_cast<size_t>(selectedSweepBand)];
+  double lo = std::min(band.startFreqHz, band.endFreqHz);
+  double hi = std::max(band.startFreqHz, band.endFreqHz);
+  if (!(hi > lo) || sampleRateHz <= 0.0) return;
+
+  sweepRangeStartHz = lo;
+  sweepRangeEndHz = hi;
+  sweepStepHz = sampleRateHz;
+
+  int nBins = static_cast<int>(rxFft.fftSize());
+  size_t numSteps = static_cast<size_t>(std::ceil((hi - lo) / sweepStepHz));
+  sweepSpectrumDb.assign(std::max<size_t>(numSteps, 1) * static_cast<size_t>(nBins), -160.0f);
+
+  sweepCurrentCenterHz = lo + sweepStepHz / 2.0;
+  dev->setFrequency(sweepCurrentCenterHz);
+  rxFft.resetAveraging();
+
+  // Only take over RX if it wasn't already running -- so Stop sweep later
+  // doesn't yank RX out from under something the user started by hand.
+  sweepWeStartedRx = !dev->isRxRunning();
+  if (sweepWeStartedRx) {
+    std::string startErr;
+    dev->startRx([this](const Sample* data, size_t count) { rxRing.pushLatest(SampleBuffer(data, data + count)); },
+                 startErr);
+  }
+
+  sweepRetuneDeadline =
+      std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                              std::chrono::duration<double>(kSweepSettleSec));
+  sweepRunning = true;
+  sweepStatus = "Sweeping...";
+}
+
+void AppState::stopSweep() {
+  if (!sweepRunning) return;
+  sweepRunning = false;
+  if (sweepWeStartedRx && deviceManager.isConnected()) {
+    deviceManager.device()->stopRx();
+  }
+  sweepStatus = "Stopped";
+}
+
+void AppState::updateSweep() {
+  if (!sweepRunning) return;
+  if (!deviceManager.isConnected()) {
+    stopSweep();
+    log("Sweep stopped: device disconnected");
+    return;
+  }
+  auto now = std::chrono::steady_clock::now();
+  if (now < sweepRetuneDeadline) return;
+
+  // Capture the step that's had time to settle into the composite buffer
+  // at its absolute-frequency offset, then retune to the next one --
+  // wrapping back to the start of the range for a continuously repeating
+  // sweep rather than a single one-shot pass.
+  int nBins = static_cast<int>(rxFft.fftSize());
+  size_t stepIndex =
+      static_cast<size_t>(std::llround((sweepCurrentCenterHz - sweepStepHz / 2.0 - sweepRangeStartHz) / sweepStepHz));
+  size_t offset = stepIndex * static_cast<size_t>(nBins);
+  if (rxSpectrumDb.size() == static_cast<size_t>(nBins) && offset + static_cast<size_t>(nBins) <= sweepSpectrumDb.size()) {
+    std::copy(rxSpectrumDb.begin(), rxSpectrumDb.end(), sweepSpectrumDb.begin() + static_cast<long>(offset));
+  }
+
+  double nextCenterHz = sweepCurrentCenterHz + sweepStepHz;
+  if (nextCenterHz > sweepRangeEndHz) {
+    nextCenterHz = sweepRangeStartHz + sweepStepHz / 2.0;
+  }
+  sweepCurrentCenterHz = nextCenterHz;
+  deviceManager.device()->setFrequency(sweepCurrentCenterHz);
+  rxFft.resetAveraging();
+  sweepRetuneDeadline =
+      now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(kSweepSettleSec));
+
+  char buf[64];
+  std::snprintf(buf, sizeof buf, "Sweeping: %.3f / %.3f MHz", sweepCurrentCenterHz / 1e6, sweepRangeEndHz / 1e6);
+  sweepStatus = buf;
 }
 
 } // namespace iqforge

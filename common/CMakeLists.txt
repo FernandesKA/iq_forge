@@ -48,6 +48,7 @@ add_executable(iqforge
   gui/src/panel_tx.cpp
   gui/src/panel_rx.cpp
   gui/src/panel_visualization.cpp
+  gui/src/panel_spectrum_viewer.cpp
   gui/src/plot_time_domain.cpp
   gui/src/plot_spectrum.cpp
   gui/src/measurements.cpp
