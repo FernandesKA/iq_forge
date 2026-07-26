@@ -27,7 +27,7 @@ struct VisualizationTabState {
   bool showInstFreq = true;
 
   SpectrumViewState spectrumView;
-  AxisZoomState waterfallZoom;
+  WaterfallViewState waterfallView;
   // I/Q, Phase, and Instantaneous Frequency all derive from the same
   // triggered sample window, so they share one trigger (and one set of
   // trigger controls) instead of each independently re-deriving it. They
@@ -180,7 +180,7 @@ VisualizationRequest drawVisualizationWindow(const char* windowTitle, Visualizat
   if (tab.showWaterfall) {
     ImGui::SeparatorText("Waterfall");
     ImGui::PushID("waterfall");
-    plotWaterfall("##waterfall", waterfallRows, tab.waterfallZoom);
+    plotWaterfall("##waterfall", waterfallRows, sampleRateHz, tab.waterfallView);
     ImGui::PopID();
   }
 

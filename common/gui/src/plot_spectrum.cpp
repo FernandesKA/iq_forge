@@ -456,9 +456,9 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
       "Right-click while dragging -- cancel the selection");
 
   SpectrumMeasurements measurements = computeMeasurements(db, sampleRateHz, timeDomain);
-  constexpr float kMeasurementsWidth = 230.0f;
 
-  ImGui::BeginChild("##spectrum_plot", ImVec2(-kMeasurementsWidth - 8.0f, 220), false, ImGuiWindowFlags_NoScrollbar);
+  ImGui::BeginChild("##spectrum_plot", ImVec2(-kSpectrumMeasurementsWidth - 8.0f, 220), false,
+                     ImGuiWindowFlags_NoScrollbar);
   if (ImPlot::BeginPlot(plotId, ImVec2(-1, 220))) {
     ImPlot::SetupAxes("Frequency (Hz, baseband)", "Power (dBFS)");
     if (!db.empty()) {
@@ -517,7 +517,7 @@ void plotSpectrum(const char* plotId, const std::vector<float>& db, double sampl
   ImGui::EndChild();
 
   ImGui::SameLine();
-  ImGui::BeginChild("##spectrum_measurements", ImVec2(kMeasurementsWidth, 220), true);
+  ImGui::BeginChild("##spectrum_measurements", ImVec2(kSpectrumMeasurementsWidth, 220), true);
   drawMeasurementsTable(measurements);
   ImGui::EndChild();
 }
