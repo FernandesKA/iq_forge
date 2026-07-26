@@ -13,8 +13,33 @@ void appendTrim(std::vector<Sample>& buf, const SampleBuffer& block, size_t maxL
   }
 }
 
+// plotWaterfall() (plot_waterfall.cpp) renders one filled rectangle per
+// cell -- rows x cols, no GPU texture caching -- every single frame,
+// whether or not new data arrived. A screen is never anywhere near 32768
+// pixels wide, so past this many columns there's nothing extra to actually
+// see but plenty of frame time to lose (this is what made "real-time RX"
+// visibly stutter once the FFT size control allowed picking large sizes).
+// Max-pool rather than average so a narrow peak isn't smeared/dimmed by
+// neighboring noise bins when several collapse into one column.
+constexpr int kWaterfallMaxCols = 1024;
+
+std::vector<float> downsampleMaxPool(const std::vector<float>& src, int targetCols) {
+  int n = static_cast<int>(src.size());
+  if (n <= targetCols) return src;
+  std::vector<float> out(static_cast<size_t>(targetCols));
+  for (int c = 0; c < targetCols; ++c) {
+    int lo = static_cast<int>(static_cast<int64_t>(c) * n / targetCols);
+    int hi = static_cast<int>(static_cast<int64_t>(c + 1) * n / targetCols);
+    hi = std::max(hi, lo + 1);
+    float peak = src[static_cast<size_t>(lo)];
+    for (int i = lo + 1; i < hi; ++i) peak = std::max(peak, src[static_cast<size_t>(i)]);
+    out[static_cast<size_t>(c)] = peak;
+  }
+  return out;
+}
+
 void pushWaterfallRow(std::deque<WaterfallRow>& rows, const std::vector<float>& row, int maxRows) {
-  rows.push_back(WaterfallRow{row, std::chrono::steady_clock::now()});
+  rows.push_back(WaterfallRow{downsampleMaxPool(row, kWaterfallMaxCols), std::chrono::steady_clock::now()});
   while (static_cast<int>(rows.size()) > maxRows) rows.pop_front();
 }
 
@@ -39,6 +64,13 @@ void AppState::updateDisplays() {
     log("Device disconnected (lost communication)");
   }
 
+  // At high sample rates several blocks can drain from a ring in a single
+  // frame; the spectrum only ever shows the *last* one anyway (each
+  // processSpectrum call below overwrites rxSpectrumDb/txSpectrumDb), so
+  // computing it once after the loop instead of once per block avoids
+  // doing -- and immediately discarding -- most of that work. Time-domain
+  // accumulation still sees every block, since that view is a genuine
+  // rolling history, not a "just the latest" snapshot.
   SampleBuffer block;
   bool gotRx = false;
   while (rxRing.tryPop(block)) {
@@ -50,17 +82,19 @@ void AppState::updateDisplays() {
     if (rxFrozen) continue;
     gotRx = true;
     appendTrim(rxTimeDomain, block, kTimeDomainMaxSamples);
-    processSpectrum(rxFft, block, rxSpectrumDb);
   }
-  if (gotRx) pushWaterfallRow(rxWaterfallRows, rxSpectrumDb, kWaterfallMaxRows);
+  if (gotRx) {
+    processSpectrum(rxFft, block, rxSpectrumDb);
+    pushWaterfallRow(rxWaterfallRows, rxSpectrumDb, kWaterfallMaxRows);
+  }
 
   bool gotTx = false;
   if (!txFrozen) {
     while (txPreviewRing.tryPop(block)) {
       gotTx = true;
       appendTrim(txTimeDomain, block, kTimeDomainMaxSamples);
-      processSpectrum(txFft, block, txSpectrumDb);
     }
+    if (gotTx) processSpectrum(txFft, block, txSpectrumDb);
 
     // Without an active TX, neither the generator nor a loaded file source
     // otherwise ever runs, so the signal being configured is invisible until
