@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=iqforge
+Comment=SDR signal capture/transmit GUI
+Exec=iqforge
+Icon=iqforge
+Terminal=false
+Type=Application
+Categories=Utility;

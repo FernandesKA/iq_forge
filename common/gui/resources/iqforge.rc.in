@@ -1,0 +1,7 @@
+// Embeds assets/iqforge.ico into iqforge.exe, so both the .exe itself and
+// any shortcut to it (e.g. the NSIS installer's desktop/start-menu link,
+// see CPACK_CREATE_DESKTOP_LINKS in CMakeLists.txt) show the app icon
+// instead of Windows' generic executable icon. Generated from this .in via
+// configure_file() so the icon path matches wherever the repo is checked
+// out (see common/CMakeLists.txt).
+IDI_ICON1 ICON "@IQFORGE_ICON_PATH@"

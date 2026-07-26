@@ -22,6 +22,12 @@ pkg_check_modules(GLFW REQUIRED IMPORTED_TARGET glfw3)
 pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
 
 if(WIN32)
+  # Needed to compile the .rc resource that embeds assets/iqforge.ico into
+  # iqforge.exe (see common/CMakeLists.txt) -- not implied by the C/CXX
+  # languages above, and without it the built .exe (and any shortcut to it)
+  # falls back to Windows' generic executable icon.
+  enable_language(RC)
+
   # Neither libiio nor libhackrf have a vcpkg port, so they can't be pulled in
   # via the vcpkg/pkg-config path used on Linux. libiio ships prebuilt MSVC
   # binaries with its releases; libhackrf is a single hackrf.c/hackrf.h pair
@@ -155,6 +161,18 @@ install(TARGETS iqforge
 install(FILES README.md
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
+
+if(NOT WIN32)
+  # Desktop-menu integration for the .deb package: without these, `apt
+  # install`ing it drops a bare binary in /usr/bin with no launcher entry or
+  # icon anywhere a desktop environment would find it.
+  install(FILES ${PROJECT_SOURCE_DIR}/assets/iqforge.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+  )
+  install(FILES ${PROJECT_SOURCE_DIR}/assets/iqforge.png
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+  )
+endif()
 
 if(WIN32)
   # The CI workflow copies all runtime DLLs (vcpkg deps, libiio, hackrf) next

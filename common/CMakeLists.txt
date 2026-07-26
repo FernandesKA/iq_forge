@@ -24,6 +24,16 @@ target_link_libraries(iqforge_core PUBLIC
   nlohmann_json::nlohmann_json
 )
 
+if(WIN32)
+  set(IQFORGE_ICON_PATH "${PROJECT_SOURCE_DIR}/assets/iqforge.ico")
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/resources/iqforge.rc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/iqforge.rc
+    @ONLY
+  )
+  set(IQFORGE_ICON_RC ${CMAKE_CURRENT_BINARY_DIR}/iqforge.rc)
+endif()
+
 add_executable(iqforge
   main.cpp
   gui/src/app.cpp
@@ -42,6 +52,7 @@ add_executable(iqforge
   gui/src/plot_waterfall.cpp
   gui/src/plot_phase.cpp
   gui/src/plot_instfreq.cpp
+  ${IQFORGE_ICON_RC}
 )
 target_include_directories(iqforge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui/inc)
 target_link_libraries(iqforge PRIVATE iqforge_core implot imgui)

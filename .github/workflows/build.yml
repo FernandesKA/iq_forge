@@ -39,15 +39,8 @@ jobs:
           cp build/common/iqforge appimage-root/usr/bin/iqforge
           mkdir -p appimage-root/usr/share/applications
           mkdir -p appimage-root/usr/share/doc/iqforge
-          cat > appimage-root/usr/share/applications/iqforge.desktop <<'EOF'
-          [Desktop Entry]
-          Name=iqforge
-          Exec=iqforge
-          Icon=iqforge
-          Type=Application
-          Categories=Utility;
-          EOF
-          cp appimage-root/usr/share/applications/iqforge.desktop appimage-root/iqforge.desktop
+          cp assets/iqforge.desktop appimage-root/usr/share/applications/iqforge.desktop
+          cp assets/iqforge.desktop appimage-root/iqforge.desktop
           mkdir -p appimage-root/usr/share/icons/hicolor/256x256/apps
           cp assets/iqforge.png appimage-root/usr/share/icons/hicolor/256x256/apps/iqforge.png
           cp assets/iqforge.png appimage-root/iqforge.png
