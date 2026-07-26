@@ -10,6 +10,14 @@ namespace iqforge {
 
 enum class DeviceKind { PlutoSDR, HackRF };
 
+// AD9361 (PlutoSDR) RX gain control mode. AgcSlow/AgcFast map to the
+// AD9361's "slow_attack"/"fast_attack" gain_control_mode values -- slow is
+// the better default for continuous monitoring (spectrum/waterfall), fast
+// reacts quicker to bursty signals at the cost of more gain "pumping" on
+// noise. HackRF has no hardware AGC at all (see hackrf_device.h) -- Manual
+// is the only mode it actually supports.
+enum class RxGainMode { AgcSlow, AgcFast, Manual };
+
 struct DeviceConfig {
   DeviceKind kind = DeviceKind::PlutoSDR;
 
@@ -31,6 +39,8 @@ struct DeviceConfig {
   // Pluto: RX gain in dB, 0..77 (manual gain control). HackRF: mapped to
   // lna (0-40, 8dB steps) + vga (0-62, 2dB steps) gain.
   double rxGainDb = 30.0;
+  // Pluto only -- see RxGainMode above. Ignored by HackRF (always manual).
+  RxGainMode rxGainMode = RxGainMode::AgcSlow;
 };
 
 using RxCallback = std::function<void(const Sample* data, size_t count)>;
@@ -69,6 +79,9 @@ class IDevice {
   virtual bool setBandwidth(double hz) = 0;
   virtual bool setTxGain(double db) = 0;
   virtual bool setRxGain(double db) = 0;
+  // Returns false if the device doesn't support the requested mode (e.g.
+  // any AGC mode on HackRF, which has no hardware AGC at all).
+  virtual bool setRxGainMode(RxGainMode mode) = 0;
 
   virtual std::string name() const = 0;
 };

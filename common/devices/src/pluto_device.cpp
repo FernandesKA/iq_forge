@@ -24,6 +24,15 @@ iio_channel* findLoChannel(iio_device* phy, bool tx) {
   // RX LO = altvoltage0, TX LO = altvoltage1 (both are output channels).
   return iio_device_find_channel(phy, tx ? "altvoltage1" : "altvoltage0", true);
 }
+
+const char* gainControlModeString(RxGainMode mode) {
+  switch (mode) {
+    case RxGainMode::AgcSlow: return "slow_attack";
+    case RxGainMode::AgcFast: return "fast_attack";
+    case RxGainMode::Manual: return "manual";
+  }
+  return "manual";
+}
 } // namespace
 
 PlutoDevice::PlutoDevice() = default;
@@ -65,8 +74,12 @@ bool PlutoDevice::configurePhy(std::string& errorOut) {
   checkedWriteLL(rxPhy, "sampling_frequency", static_cast<long long>(cfg_.sampleRateHz), warnings);
   checkedWriteLL(txPhy, "sampling_frequency", static_cast<long long>(cfg_.sampleRateHz), warnings);
 
-  iio_channel_attr_write(rxPhy, "gain_control_mode", "manual");
-  iio_channel_attr_write_double(rxPhy, "hardwaregain", cfg_.rxGainDb);
+  iio_channel_attr_write(rxPhy, "gain_control_mode", gainControlModeString(cfg_.rxGainMode));
+  // hardwaregain is only writable in manual mode -- the AD9361 drives it
+  // itself under either AGC mode and rejects/ignores writes to it then.
+  if (cfg_.rxGainMode == RxGainMode::Manual) {
+    iio_channel_attr_write_double(rxPhy, "hardwaregain", cfg_.rxGainDb);
+  }
   iio_channel_attr_write_double(txPhy, "hardwaregain", cfg_.txGainDb);
 
   checkedWriteLL(rxLo, "frequency", static_cast<long long>(cfg_.centerFreqHz), warnings);
@@ -303,10 +316,26 @@ bool PlutoDevice::setTxGain(double db) {
 
 bool PlutoDevice::setRxGain(double db) {
   if (!phy_) return false;
-  cfg_.rxGainDb = db;
+  cfg_.rxGainDb = db; // remembered regardless, so switching back to Manual re-applies it
+  if (cfg_.rxGainMode != RxGainMode::Manual) return false; // AD9361 drives hardwaregain itself under AGC
   iio_channel* rxPhy = findPhyChannel(phy_, false);
   if (!rxPhy) return false;
   return iio_channel_attr_write_double(rxPhy, "hardwaregain", db) == 0;
+}
+
+bool PlutoDevice::setRxGainMode(RxGainMode mode) {
+  if (!phy_) return false;
+  cfg_.rxGainMode = mode;
+  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  if (!rxPhy) return false;
+  bool ok = iio_channel_attr_write(rxPhy, "gain_control_mode", gainControlModeString(mode)) >= 0;
+  // Re-apply the last known gain immediately on switching back to Manual --
+  // otherwise it's left at whatever the AGC last converged to until the
+  // user happens to touch the gain slider again.
+  if (ok && mode == RxGainMode::Manual) {
+    ok = iio_channel_attr_write_double(rxPhy, "hardwaregain", cfg_.rxGainDb) == 0;
+  }
+  return ok;
 }
 
 } // namespace iqforge

@@ -37,6 +37,8 @@ class HackRFDevice : public IDevice {
   bool setBandwidth(double hz) override;
   bool setTxGain(double db) override;
   bool setRxGain(double db) override;
+  // HackRF has no hardware AGC -- returns false for anything but Manual.
+  bool setRxGainMode(RxGainMode mode) override;
 
   std::string name() const override { return "HackRF"; }
 

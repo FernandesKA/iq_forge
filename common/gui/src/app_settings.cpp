@@ -112,6 +112,21 @@ DeviceKind deviceKindFromName(const std::string& s, DeviceKind fallback) {
   return fallback;
 }
 
+const char* rxGainModeName(RxGainMode m) {
+  switch (m) {
+    case RxGainMode::AgcSlow: return "AgcSlow";
+    case RxGainMode::AgcFast: return "AgcFast";
+    case RxGainMode::Manual: return "Manual";
+  }
+  return "AgcSlow";
+}
+RxGainMode rxGainModeFromName(const std::string& s, RxGainMode fallback) {
+  if (s == "AgcSlow") return RxGainMode::AgcSlow;
+  if (s == "AgcFast") return RxGainMode::AgcFast;
+  if (s == "Manual") return RxGainMode::Manual;
+  return fallback;
+}
+
 const char* waveformName(WaveformType t) {
   switch (t) {
     case WaveformType::Tone: return "Tone";
@@ -202,6 +217,7 @@ nlohmann::json settingsToJson(const AppState& state) {
   dev["bandwidthUnit"] = freqUnitName(state.bandwidthUnit);
   dev["txGainDb"] = state.txGainDb;
   dev["rxGainDb"] = state.rxGainDb;
+  dev["rxGainMode"] = rxGainModeName(state.rxGainMode);
   dev["fftSize"] = state.fftSize;
   j["device"] = std::move(dev);
 
@@ -263,6 +279,7 @@ void applySettingsJson(AppState& state, const nlohmann::json& j) {
     state.bandwidthUnit = freqUnitFromName(dev.value("bandwidthUnit", std::string()), state.bandwidthUnit);
     state.txGainDb = dev.value("txGainDb", state.txGainDb);
     state.rxGainDb = dev.value("rxGainDb", state.rxGainDb);
+    state.rxGainMode = rxGainModeFromName(dev.value("rxGainMode", std::string()), state.rxGainMode);
     int fftSize = dev.value("fftSize", state.fftSize);
     state.setFftSize(fftSize);
   }

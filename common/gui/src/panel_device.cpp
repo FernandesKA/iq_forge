@@ -44,12 +44,14 @@ void drawDevicePanel(AppState& state) {
     state.selectedKind = DeviceKind::PlutoSDR;
     state.txGainDb = kMinAtten;
     state.rxGainDb = kZero;
+    state.rxGainMode = RxGainMode::AgcSlow;
   }
   ImGui::SameLine();
   if (ImGui::RadioButton("HackRF", kind == 1) && kind != 1) {
     state.selectedKind = DeviceKind::HackRF;
     state.txGainDb = kZero;
     state.rxGainDb = kZero;
+    state.rxGainMode = RxGainMode::Manual; // no hardware AGC on HackRF
   }
 
   ImGui::InputText("URI / Serial", state.uriBuffer, sizeof(state.uriBuffer));
@@ -75,6 +77,7 @@ void drawDevicePanel(AppState& state) {
       cfg.bandwidthHz = state.bandwidthHz;
       cfg.txGainDb = state.txGainDb;
       cfg.rxGainDb = state.rxGainDb;
+      cfg.rxGainMode = state.rxGainMode;
       if (state.deviceManager.connect(cfg, state.connectError)) {
         state.log("Connected to " + state.deviceManager.device()->name());
         if (!state.connectError.empty()) {
@@ -138,9 +141,37 @@ void drawDevicePanel(AppState& state) {
       ImGuiDataType_Double, &state.txGainDb,
       state.selectedKind == DeviceKind::HackRF ? &kZero : &kMinAtten,
       state.selectedKind == DeviceKind::HackRF ? &kHackrfTxMax : &kZero, "%.2f");
+
+  // HackRF has no hardware AGC (see hackrf_device.h), so the mode picker
+  // only makes sense for PlutoSDR -- HackRF stays permanently Manual.
+  bool gainModeChanged = false;
+  if (state.selectedKind == DeviceKind::PlutoSDR) {
+    if (ImGui::RadioButton("Manual##rxgainmode", state.rxGainMode == RxGainMode::Manual)) {
+      state.rxGainMode = RxGainMode::Manual;
+      gainModeChanged = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("AGC slow", state.rxGainMode == RxGainMode::AgcSlow)) {
+      state.rxGainMode = RxGainMode::AgcSlow;
+      gainModeChanged = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("AGC fast", state.rxGainMode == RxGainMode::AgcFast)) {
+      state.rxGainMode = RxGainMode::AgcFast;
+      gainModeChanged = true;
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("RX gain mode");
+  }
+
+  // Gain is driven by the AD9361 itself under either AGC mode -- the slider
+  // would just be misleading (and, per setRxGain(), any drag on it while
+  // AGC is active gets silently ignored by the device anyway).
+  ImGui::BeginDisabled(state.selectedKind == DeviceKind::PlutoSDR && state.rxGainMode != RxGainMode::Manual);
   bool rxGainChanged = ImGui::SliderScalar(
       "RX gain (dB)", ImGuiDataType_Double, &state.rxGainDb, &kZero,
       state.selectedKind == DeviceKind::HackRF ? &kHackrfRxMax : &kPlutoRxMax, "%.2f");
+  ImGui::EndDisabled();
 
   if (connected && changed) {
     IDevice* dev = state.deviceManager.device();
@@ -149,6 +180,11 @@ void drawDevicePanel(AppState& state) {
     if (!dev->setBandwidth(state.bandwidthHz)) state.log("Bandwidth rejected by device");
   }
   if (connected && txGainChanged) state.deviceManager.device()->setTxGain(state.txGainDb);
+  if (connected && gainModeChanged) {
+    if (!state.deviceManager.device()->setRxGainMode(state.rxGainMode)) {
+      state.log("RX gain mode rejected by device");
+    }
+  }
   if (connected && rxGainChanged) state.deviceManager.device()->setRxGain(state.rxGainDb);
 
   ImGui::Separator();

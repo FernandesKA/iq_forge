@@ -205,4 +205,8 @@ bool HackRFDevice::setRxGain(double db) {
   return ok;
 }
 
+bool HackRFDevice::setRxGainMode(RxGainMode mode) {
+  return mode == RxGainMode::Manual; // no hardware AGC to switch to
+}
+
 } // namespace iqforge

@@ -35,6 +35,7 @@ void fillDistinctive(AppState& s) {
   s.bandwidthUnit = FreqUnit::Hz;
   s.txGainDb = -12.5;
   s.rxGainDb = 30.0;
+  s.rxGainMode = RxGainMode::AgcFast;
   s.setFftSize(4096);
 
   s.txSourceMode = 1;
@@ -68,6 +69,7 @@ void checkMatchesDistinctive(const AppState& s) {
   CHECK(s.bandwidthUnit == FreqUnit::Hz);
   CHECK(s.txGainDb == -12.5);
   CHECK(s.rxGainDb == 30.0);
+  CHECK(s.rxGainMode == RxGainMode::AgcFast);
   CHECK(s.fftSize == 4096);
   CHECK(s.txFft.fftSize() == 4096);
   CHECK(s.rxFft.fftSize() == 4096);

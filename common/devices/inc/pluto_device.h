@@ -38,6 +38,7 @@ class PlutoDevice : public IDevice {
   bool setBandwidth(double hz) override;
   bool setTxGain(double db) override;
   bool setRxGain(double db) override;
+  bool setRxGainMode(RxGainMode mode) override;
 
   std::string name() const override { return "PlutoSDR"; }
 
