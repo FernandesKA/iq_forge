@@ -18,8 +18,21 @@ jobs:
             libglfw3-dev libgl1-mesa-dev \
             libiio-dev libhackrf-dev libfftw3-dev
 
+      # Only a `vX.Y.Z` tag push carries a real version; other triggers
+      # (branch pushes, PRs) leave this empty so CMakeLists.txt's
+      # IQFORGE_PACKAGE_VERSION override is skipped and the placeholder
+      # project() version is used instead.
+      - name: Determine package version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF -DIQFORGE_PACKAGE_VERSION=${{ steps.version.outputs.value }}
 
       - name: Build
         run: cmake --build build --parallel
@@ -91,11 +104,23 @@ jobs:
           triplet: x64-windows
           token: ${{ github.token }}
 
+      # See the Linux job's identical step -- only a `vX.Y.Z` tag push
+      # carries a real version.
+      - name: Determine package version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure
         env:
           PKG_CONFIG_PATH: ${{ github.workspace }}\vcpkg\installed\x64-windows\lib\pkgconfig
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF ${{ steps.vcpkg.outputs.vcpkg-cmake-config }} -G Ninja
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DIQFORGE_BUILD_TESTS=OFF -DIQFORGE_PACKAGE_VERSION=${{ steps.version.outputs.value }} ${{ steps.vcpkg.outputs.vcpkg-cmake-config }} -G Ninja
 
       - name: Build
         run: cmake --build build --parallel

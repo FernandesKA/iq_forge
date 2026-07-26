@@ -45,6 +45,15 @@ struct AppState {
   std::string connectError;
   std::vector<ScannedDevice> scanResults;
 
+  // FFT size used for both RX and TX spectrum/waterfall processing (see
+  // fft_processor.h) -- one shared value rather than per-direction, since
+  // the GUI exposes a single control (panel_device.cpp) for it. Declared
+  // here, before txFft/rxFft below, so their default member initializers
+  // can read it. Change it through setFftSize() below, not directly --
+  // txFft/rxFft and the waterfall row histories all need to stay in sync
+  // with it.
+  int fftSize = 2048;
+
   // --- TX ---
   int txSourceMode = 0; // 0 = generator, 1 = IQ file
   std::shared_ptr<SignalGenerator> generator = std::make_shared<SignalGenerator>();
@@ -83,7 +92,7 @@ struct AppState {
   RingBuffer<SampleBuffer> txPreviewRing{8};
   std::vector<Sample> txTimeDomain;
   std::vector<float> txSpectrumDb;
-  FftProcessor txFft{SpectrumConfig{2048, WindowType::Hann, 0.3f}};
+  FftProcessor txFft{SpectrumConfig{static_cast<size_t>(fftSize), WindowType::Hann, 0.3f}};
   std::deque<WaterfallRow> txWaterfallRows;
   // Pauses updateDisplays()'s writes to the fields above -- TX itself (and,
   // for RX below, recording) keeps running untouched; only what's shown
@@ -100,7 +109,7 @@ struct AppState {
   RingBuffer<SampleBuffer> rxRing{8};
   std::vector<Sample> rxTimeDomain;
   std::vector<float> rxSpectrumDb;
-  FftProcessor rxFft{SpectrumConfig{2048, WindowType::Hann, 0.3f}};
+  FftProcessor rxFft{SpectrumConfig{static_cast<size_t>(fftSize), WindowType::Hann, 0.3f}};
   std::deque<WaterfallRow> rxWaterfallRows;
   // See txFrozen above. Recording (below) is unaffected by this -- it's
   // fed from the same drained blocks regardless of whether the display is
@@ -145,6 +154,13 @@ struct AppState {
   // Called once per frame on the GUI thread: drains ring buffers, updates
   // time-domain/spectrum/waterfall data.
   void updateDisplays();
+
+  // Applies a new FFT size to both txFft/rxFft (rebuilding their FFTW plans)
+  // and drops both waterfall row histories: plotWaterfall() flattens rows
+  // into a single fixed-stride buffer assuming every row is the same length
+  // (see plot_waterfall.cpp), so leaving old-sized rows in the deque after
+  // a resize would corrupt that flatten. No-op if newSize == fftSize.
+  void setFftSize(int newSize);
 };
 
 } // namespace iqforge

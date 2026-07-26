@@ -38,7 +38,18 @@ class FftProcessor {
   size_t fftSize() const { return cfg_.fftSize; }
   void resetAveraging() { avgInit_ = false; }
 
+  // Rebuilds the window/FFTW plan/buffers for a new size (no-op if
+  // unchanged) and drops the running average, same as resetAveraging().
+  // Not cheap -- FFTW_MEASURE benchmarks real transforms to pick a plan --
+  // so this is meant for an occasional user-driven settings change, not a
+  // per-frame call. Callers that keep separate buffers indexed by the old
+  // fftSize() (e.g. the waterfall's row history) need to discard those
+  // themselves; this only touches the processor's own state.
+  void setFftSize(size_t fftSize);
+
  private:
+  void init();
+
   SpectrumConfig cfg_;
   std::vector<float> window_;
   fftwf_complex* fftIn_;

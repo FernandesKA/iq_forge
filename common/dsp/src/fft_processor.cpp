@@ -24,18 +24,30 @@ std::vector<float> buildWindow(WindowType type, size_t n) {
 }
 } // namespace
 
-FftProcessor::FftProcessor(SpectrumConfig cfg) : cfg_(cfg) {
-  window_ = buildWindow(cfg_.window, cfg_.fftSize);
-  fftIn_ = static_cast<fftwf_complex*>(fftwf_malloc(sizeof(fftwf_complex) * cfg_.fftSize));
-  fftOut_ = static_cast<fftwf_complex*>(fftwf_malloc(sizeof(fftwf_complex) * cfg_.fftSize));
-  plan_ = fftwf_plan_dft_1d(static_cast<int>(cfg_.fftSize), fftIn_, fftOut_, FFTW_FORWARD, FFTW_MEASURE);
-  avgDb_.assign(cfg_.fftSize, -160.0f);
-}
+FftProcessor::FftProcessor(SpectrumConfig cfg) : cfg_(cfg) { init(); }
 
 FftProcessor::~FftProcessor() {
   fftwf_destroy_plan(plan_);
   fftwf_free(fftIn_);
   fftwf_free(fftOut_);
+}
+
+void FftProcessor::init() {
+  window_ = buildWindow(cfg_.window, cfg_.fftSize);
+  fftIn_ = static_cast<fftwf_complex*>(fftwf_malloc(sizeof(fftwf_complex) * cfg_.fftSize));
+  fftOut_ = static_cast<fftwf_complex*>(fftwf_malloc(sizeof(fftwf_complex) * cfg_.fftSize));
+  plan_ = fftwf_plan_dft_1d(static_cast<int>(cfg_.fftSize), fftIn_, fftOut_, FFTW_FORWARD, FFTW_MEASURE);
+  avgDb_.assign(cfg_.fftSize, -160.0f);
+  avgInit_ = false;
+}
+
+void FftProcessor::setFftSize(size_t fftSize) {
+  if (fftSize == cfg_.fftSize) return;
+  fftwf_destroy_plan(plan_);
+  fftwf_free(fftIn_);
+  fftwf_free(fftOut_);
+  cfg_.fftSize = fftSize;
+  init();
 }
 
 void FftProcessor::process(const Sample* in, size_t n, std::vector<float>& outDb) {

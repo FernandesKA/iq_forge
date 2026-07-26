@@ -88,4 +88,13 @@ void AppState::updateDisplays() {
   if (gotTx) pushWaterfallRow(txWaterfallRows, txSpectrumDb, kWaterfallMaxRows);
 }
 
+void AppState::setFftSize(int newSize) {
+  if (newSize == fftSize) return;
+  fftSize = newSize;
+  txFft.setFftSize(static_cast<size_t>(newSize));
+  rxFft.setFftSize(static_cast<size_t>(newSize));
+  txWaterfallRows.clear();
+  rxWaterfallRows.clear();
+}
+
 } // namespace iqforge

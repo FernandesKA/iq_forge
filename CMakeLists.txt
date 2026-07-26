@@ -185,6 +185,17 @@ if(WIN32)
   )
 endif()
 
+# CI passes the actual release tag here (e.g. -DIQFORGE_PACKAGE_VERSION=1.2.3
+# derived from a vX.Y.Z git tag, see .github/workflows/build.yml) so packages
+# built for a release carry that version. Without this, CPack falls back to
+# PROJECT_VERSION from the project() call at the top of this file, which is
+# a fixed placeholder that never changes between tags -- every .deb/.exe
+# would report "0.1.0" regardless of what was actually tagged.
+set(IQFORGE_PACKAGE_VERSION "" CACHE STRING "Override CPACK_PACKAGE_VERSION (e.g. from a CI release tag)")
+if(IQFORGE_PACKAGE_VERSION)
+  set(CPACK_PACKAGE_VERSION "${IQFORGE_PACKAGE_VERSION}")
+endif()
+
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VENDOR "iqforge")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SDR signal capture/transmit GUI")

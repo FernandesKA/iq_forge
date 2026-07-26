@@ -7,6 +7,7 @@
 #include <string>
 
 #include "freq_input.h"
+#include "plot_zoom_controls.h"
 
 namespace iqforge {
 
@@ -16,6 +17,12 @@ constexpr double kMinAtten = -89.75;
 constexpr double kHackrfTxMax = 47.0;
 constexpr double kHackrfRxMax = 102.0;
 constexpr double kPlutoRxMax = 77.0;
+
+// Powers of two only -- FFTW accepts any size, but these are the sizes that
+// actually benefit from its fast paths, and cover everything from a coarse/
+// fast display down to fine frequency resolution.
+constexpr int kFftSizeOptions[] = {256, 512, 1024, 2048, 4096, 8192, 16384, 32768};
+constexpr int kNumFftSizeOptions = static_cast<int>(sizeof(kFftSizeOptions) / sizeof(kFftSizeOptions[0]));
 
 const char* kUriHint(DeviceKind kind) {
   switch (kind) {
@@ -143,6 +150,37 @@ void drawDevicePanel(AppState& state) {
   }
   if (connected && txGainChanged) state.deviceManager.device()->setTxGain(state.txGainDb);
   if (connected && rxGainChanged) state.deviceManager.device()->setRxGain(state.rxGainDb);
+
+  ImGui::Separator();
+
+  int fftSizeIdx = 0;
+  for (int i = 0; i < kNumFftSizeOptions; ++i) {
+    if (kFftSizeOptions[i] == state.fftSize) {
+      fftSizeIdx = i;
+      break;
+    }
+  }
+  char fftSizePreview[16];
+  std::snprintf(fftSizePreview, sizeof fftSizePreview, "%d", kFftSizeOptions[fftSizeIdx]);
+  ImGui::SetNextItemWidth(120.0f);
+  if (ImGui::BeginCombo("FFT size", fftSizePreview)) {
+    for (int i = 0; i < kNumFftSizeOptions; ++i) {
+      char label[16];
+      std::snprintf(label, sizeof label, "%d", kFftSizeOptions[i]);
+      if (ImGui::Selectable(label, i == fftSizeIdx)) state.setFftSize(kFftSizeOptions[i]);
+      if (i == fftSizeIdx) ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
+  }
+  ImGui::SameLine();
+  HelpMarker(
+      "Number of points per FFT for the Spectrum and Waterfall views.\n"
+      "Higher = finer frequency resolution but slower and more smeared in "
+      "time; lower = faster and more time-responsive but coarser frequency "
+      "resolution.\n"
+      "Applies to both RX and TX and takes effect immediately -- this also "
+      "clears the waterfall history since old rows no longer match the new "
+      "size.");
 
   ImGui::End();
 }
