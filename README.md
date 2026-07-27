@@ -151,6 +151,11 @@ cmake --build build
 
 Требуются пакеты: GLFW, OpenGL, libiio, fftw3f и libhackrf. `imgui`, `implot`, `libsamplerate` и `nlohmann/json` (для чтения/записи SigMF) подтягиваются сами через FetchContent.
 
+```
+sudo apt update
+sudo apt install libglfw3-dev libglu1-mesa-dev freeglut3-dev mesa-common-dev libiio-dev libfftw3-dev libhackrf-dev
+```
+
 ## Запуск тестов
 
 ```sh
