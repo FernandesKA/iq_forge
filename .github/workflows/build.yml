@@ -5,8 +5,11 @@ on:
   pull_request:
 
 jobs:
-  build-linux-x86_64:
-    runs-on: ubuntu-latest
+  build-linux:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,10 +21,6 @@ jobs:
             libglfw3-dev libgl1-mesa-dev \
             libiio-dev libhackrf-dev libfftw3-dev
 
-      # Only a `vX.Y.Z` tag push carries a real version; other triggers
-      # (branch pushes, PRs) leave this empty so CMakeLists.txt's
-      # IQFORGE_PACKAGE_VERSION override is skipped and the placeholder
-      # project() version is used instead.
       - name: Determine package version
         id: version
         run: |
@@ -67,19 +66,19 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: iqforge-linux-x86_64
+          name: iqforge-linux-${{ matrix.os }}-binary
           path: build/common/iqforge
 
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: iqforge-deb-x86_64
+          name: iqforge-deb-${{ matrix.os }}
           path: ./*.deb
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: iqforge-appimage-x86_64
+          name: iqforge-appimage-${{ matrix.os }}
           path: dist-appimage/*.AppImage
 
   build-windows:
@@ -107,8 +106,6 @@ jobs:
           triplet: x64-windows
           token: ${{ github.token }}
 
-      # See the Linux job's identical step -- only a `vX.Y.Z` tag push
-      # carries a real version.
       - name: Determine package version
         id: version
         shell: bash
@@ -157,55 +154,148 @@ jobs:
           path: iqforge-*-win64.exe
 
   release:
-    needs: [build-linux-x86_64, build-windows]
+    needs: [build-linux, build-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download Linux binary
+      # ---- Linux artifacts for each OS version ----
+      - name: Download binary (22.04)
         uses: actions/download-artifact@v4
         with:
-          name: iqforge-linux-x86_64
-          path: dist
+          name: iqforge-linux-ubuntu-22.04-binary
+          path: linux-22.04
 
-      - name: Download Debian package
+      - name: Download Debian (22.04)
         uses: actions/download-artifact@v4
         with:
-          name: iqforge-deb-x86_64
-          path: dist-deb
+          name: iqforge-deb-ubuntu-22.04
+          path: linux-22.04-deb
 
-      - name: Download AppImage
+      - name: Download AppImage (22.04)
         uses: actions/download-artifact@v4
         with:
-          name: iqforge-appimage-x86_64
-          path: dist-appimage
+          name: iqforge-appimage-ubuntu-22.04
+          path: linux-22.04-appimage
 
+      - name: Download binary (24.04)
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-linux-ubuntu-24.04-binary
+          path: linux-24.04
+
+      - name: Download Debian (24.04)
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-deb-ubuntu-24.04
+          path: linux-24.04-deb
+
+      - name: Download AppImage (24.04)
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-appimage-ubuntu-24.04
+          path: linux-24.04-appimage
+
+      - name: Download binary (latest, represents 26.04+)
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-linux-ubuntu-latest-binary
+          path: linux-latest
+
+      - name: Download Debian (latest)
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-deb-ubuntu-latest
+          path: linux-latest-deb
+
+      - name: Download AppImage (latest)
+        uses: actions/download-artifact@v4
+        with:
+          name: iqforge-appimage-ubuntu-latest
+          path: linux-latest-appimage
+
+      # ---- Windows artifacts ----
       - name: Download Windows executable
         uses: actions/download-artifact@v4
         with:
           name: iqforge-windows-x86_64
-          path: dist-windows
+          path: windows
 
       - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:
           name: iqforge-windows-installer
-          path: dist-windows-installer
+          path: windows-installer
 
       - name: Prepare release files
         run: |
-          mv dist/iqforge dist/iqforge-linux-x86_64
-          cp dist-deb/*.deb dist/
-          cp dist-appimage/*.AppImage dist/
-          (cd dist-windows && zip -r ../dist/iqforge-windows-x86_64.zip .)
-          cp dist-windows-installer/*.exe dist/
+          mkdir -p dist
+
+          # Linux binaries
+          cp linux-22.04/iqforge dist/iqforge-linux-22.04
+          cp linux-24.04/iqforge dist/iqforge-linux-24.04
+          cp linux-latest/iqforge dist/iqforge-linux-latest
+
+          # Debian packages: rename to include OS version
+          cd linux-22.04-deb
+          for f in *.deb; do
+            mv "$f" "${f%.deb}-ubuntu22.04.deb"
+          done
+          cp *.deb ../dist/
+          cd ..
+
+          cd linux-24.04-deb
+          for f in *.deb; do
+            mv "$f" "${f%.deb}-ubuntu24.04.deb"
+          done
+          cp *.deb ../dist/
+          cd ..
+
+          cd linux-latest-deb
+          for f in *.deb; do
+            mv "$f" "${f%.deb}-ubuntu-latest.deb"
+          done
+          cp *.deb ../dist/
+          cd ..
+
+          # AppImages: rename similarly
+          cd linux-22.04-appimage
+          for f in *.AppImage; do
+            mv "$f" "${f%.AppImage}-ubuntu22.04.AppImage"
+          done
+          cp *.AppImage ../dist/
+          cd ..
+
+          cd linux-24.04-appimage
+          for f in *.AppImage; do
+            mv "$f" "${f%.AppImage}-ubuntu24.04.AppImage"
+          done
+          cp *.AppImage ../dist/
+          cd ..
+
+          cd linux-latest-appimage
+          for f in *.AppImage; do
+            mv "$f" "${f%.AppImage}-ubuntu-latest.AppImage"
+          done
+          cp *.AppImage ../dist/
+          cd ..
+
+          # Windows: zip the executable with DLLs
+          cd windows
+          zip -r ../dist/iqforge-windows-x86_64.zip .
+          cd ..
+
+          # Windows installer
+          cp windows-installer/*.exe dist/
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/iqforge-linux-x86_64
+            dist/iqforge-linux-22.04
+            dist/iqforge-linux-24.04
+            dist/iqforge-linux-latest
             dist/*.deb
             dist/*.AppImage
             dist/iqforge-windows-x86_64.zip
