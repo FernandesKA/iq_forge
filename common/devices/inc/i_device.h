@@ -41,6 +41,12 @@ struct DeviceConfig {
   double rxGainDb = 30.0;
   // Pluto only -- see RxGainMode above. Ignored by HackRF (always manual).
   RxGainMode rxGainMode = RxGainMode::AgcSlow;
+
+  // Pluto only: which physical TX chain to stream on -- 0 = TX1 (default),
+  // 1 = TX2. TX2 only exists on units running AD9361 in 2T2R/dual-channel
+  // mode (stock single-channel Pluto firmware doesn't expose it, in which
+  // case open() fails with a clear error). Ignored by HackRF (single TX).
+  int txChannel = 0;
 };
 
 using RxCallback = std::function<void(const Sample* data, size_t count)>;

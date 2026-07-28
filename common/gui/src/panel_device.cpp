@@ -52,10 +52,23 @@ void drawDevicePanel(AppState& state) {
     state.txGainDb = kZero;
     state.rxGainDb = kZero;
     state.rxGainMode = RxGainMode::Manual; // no hardware AGC on HackRF
+    state.txChannel = 0; // HackRF has only one TX chain
   }
 
   ImGui::InputText("URI / Serial", state.uriBuffer, sizeof(state.uriBuffer));
   ImGui::TextDisabled("%s", kUriHint(state.selectedKind));
+
+  if (state.selectedKind == DeviceKind::PlutoSDR) {
+    if (ImGui::RadioButton("TX1##txchannel", state.txChannel == 0)) state.txChannel = 0;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("TX2##txchannel", state.txChannel == 1)) state.txChannel = 1;
+    ImGui::SameLine();
+    HelpMarker(
+        "Which physical TX chain to transmit on. TX2 only works on units "
+        "running the AD9361 in 2T2R/dual-channel mode -- stock single-"
+        "channel Pluto firmware doesn't expose it and Connect will fail "
+        "with an error if selected.");
+  }
   ImGui::EndDisabled();
 
   // Connect/Disconnect deliberately sits right here, immediately after the
@@ -78,6 +91,7 @@ void drawDevicePanel(AppState& state) {
       cfg.txGainDb = state.txGainDb;
       cfg.rxGainDb = state.rxGainDb;
       cfg.rxGainMode = state.rxGainMode;
+      cfg.txChannel = state.txChannel;
       if (state.deviceManager.connect(cfg, state.connectError)) {
         state.log("Connected to " + state.deviceManager.device()->name());
         if (!state.connectError.empty()) {

@@ -218,6 +218,7 @@ nlohmann::json settingsToJson(const AppState& state) {
   dev["txGainDb"] = state.txGainDb;
   dev["rxGainDb"] = state.rxGainDb;
   dev["rxGainMode"] = rxGainModeName(state.rxGainMode);
+  dev["txChannel"] = state.txChannel;
   dev["fftSize"] = state.fftSize;
   j["device"] = std::move(dev);
 
@@ -280,6 +281,7 @@ void applySettingsJson(AppState& state, const nlohmann::json& j) {
     state.txGainDb = dev.value("txGainDb", state.txGainDb);
     state.rxGainDb = dev.value("rxGainDb", state.rxGainDb);
     state.rxGainMode = rxGainModeFromName(dev.value("rxGainMode", std::string()), state.rxGainMode);
+    state.txChannel = dev.value("txChannel", state.txChannel);
     int fftSize = dev.value("fftSize", state.fftSize);
     state.setFftSize(fftSize);
   }

@@ -17,8 +17,11 @@ namespace {
 constexpr float kHostToDevice = 32767.0f;
 constexpr float kDeviceToHost = 1.0f / 32768.0f;
 
-iio_channel* findPhyChannel(iio_device* phy, bool output) {
-  return iio_device_find_channel(phy, "voltage0", output);
+// channel selects which chain's phy control channel to return: 0 = TX1/RX1
+// ("voltage0"), 1 = TX2/RX2 ("voltage1"). RX always uses chain 0 -- only TX
+// channel selection is exposed today.
+iio_channel* findPhyChannel(iio_device* phy, bool output, int channel = 0) {
+  return iio_device_find_channel(phy, channel == 1 ? "voltage1" : "voltage0", output);
 }
 iio_channel* findLoChannel(iio_device* phy, bool tx) {
   // RX LO = altvoltage0, TX LO = altvoltage1 (both are output channels).
@@ -56,11 +59,13 @@ void checkedWriteLL(iio_channel* chn, const char* attr, long long value, std::ve
 
 bool PlutoDevice::configurePhy(std::string& errorOut) {
   iio_channel* rxPhy = findPhyChannel(phy_, false);
-  iio_channel* txPhy = findPhyChannel(phy_, true);
+  iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   iio_channel* rxLo = findLoChannel(phy_, false);
   iio_channel* txLo = findLoChannel(phy_, true);
   if (!rxPhy || !txPhy || !rxLo || !txLo) {
-    errorOut = "Could not find AD9361 phy channels";
+    errorOut = cfg_.txChannel == 1
+        ? "Could not find AD9361 TX2 phy channel -- this unit's firmware may not be running in 2T2R/dual-channel mode"
+        : "Could not find AD9361 phy channels";
     return false;
   }
 
@@ -120,12 +125,20 @@ bool PlutoDevice::open(const DeviceConfig& cfg, std::string& errorOut) {
     return false;
   }
 
+  // TX2's I/Q streaming channels sit at voltage2/voltage3 on the same DDS
+  // core device, right after TX1's voltage0/voltage1 -- only present when
+  // the unit is running AD9361 in 2T2R/dual-channel mode.
+  const char* txChanINam = cfg_.txChannel == 1 ? "voltage2" : "voltage0";
+  const char* txChanQNam = cfg_.txChannel == 1 ? "voltage3" : "voltage1";
+
   rxChanI_ = iio_device_find_channel(rxDev_, "voltage0", false);
   rxChanQ_ = iio_device_find_channel(rxDev_, "voltage1", false);
-  txChanI_ = iio_device_find_channel(txDev_, "voltage0", true);
-  txChanQ_ = iio_device_find_channel(txDev_, "voltage1", true);
+  txChanI_ = iio_device_find_channel(txDev_, txChanINam, true);
+  txChanQ_ = iio_device_find_channel(txDev_, txChanQNam, true);
   if (!rxChanI_ || !rxChanQ_ || !txChanI_ || !txChanQ_) {
-    errorOut = "PlutoSDR context is missing expected I/Q streaming channels";
+    errorOut = cfg_.txChannel == 1
+        ? "PlutoSDR TX2 I/Q streaming channels not found -- this unit's firmware may not be running in 2T2R/dual-channel mode"
+        : "PlutoSDR context is missing expected I/Q streaming channels";
     close();
     return false;
   }
@@ -288,7 +301,7 @@ bool PlutoDevice::setSampleRate(double sps) {
   if (!phy_) return false;
   cfg_.sampleRateHz = sps;
   iio_channel* rxPhy = findPhyChannel(phy_, false);
-  iio_channel* txPhy = findPhyChannel(phy_, true);
+  iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   if (!rxPhy || !txPhy) return false;
   bool ok = iio_channel_attr_write_longlong(rxPhy, "sampling_frequency", static_cast<long long>(sps)) == 0;
   ok &= iio_channel_attr_write_longlong(txPhy, "sampling_frequency", static_cast<long long>(sps)) == 0;
@@ -299,7 +312,7 @@ bool PlutoDevice::setBandwidth(double hz) {
   if (!phy_) return false;
   cfg_.bandwidthHz = hz;
   iio_channel* rxPhy = findPhyChannel(phy_, false);
-  iio_channel* txPhy = findPhyChannel(phy_, true);
+  iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   if (!rxPhy || !txPhy) return false;
   bool ok = iio_channel_attr_write_longlong(rxPhy, "rf_bandwidth", static_cast<long long>(hz)) == 0;
   ok &= iio_channel_attr_write_longlong(txPhy, "rf_bandwidth", static_cast<long long>(hz)) == 0;
@@ -309,7 +322,7 @@ bool PlutoDevice::setBandwidth(double hz) {
 bool PlutoDevice::setTxGain(double db) {
   if (!phy_) return false;
   cfg_.txGainDb = db;
-  iio_channel* txPhy = findPhyChannel(phy_, true);
+  iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   if (!txPhy) return false;
   return iio_channel_attr_write_double(txPhy, "hardwaregain", db) == 0;
 }
