@@ -138,11 +138,15 @@ void drawDevicePanel(AppState& state) {
                            ? "Probes USB and the network (mDNS), like SDR++'s device list"
                            : "Lists HackRF units currently attached via USB");
 
-  // Capped and independently scrollable so a long scan result list (many
-  // PlutoSDRs on the network, several HackRF units, etc.) can't push the
-  // rest of the panel down indefinitely.
+  // Grows with the result count so a handful of devices aren't squeezed into
+  // a tiny box, but caps out and becomes independently scrollable so a very
+  // long list (many PlutoSDRs on the network, several HackRF units, etc.)
+  // can't push the rest of the panel down indefinitely. Connect/Disconnect
+  // is drawn above this (see the comment at line 85), so it's never at risk
+  // of being pushed off-screen by a long scan result list.
   if (!state.scanResults.empty()) {
-    float listHeight = ImGui::GetTextLineHeightWithSpacing() * std::min<float>(state.scanResults.size(), 4.5f);
+    constexpr float kMaxVisibleRows = 12.0f;
+    float listHeight = ImGui::GetTextLineHeightWithSpacing() * std::min<float>(state.scanResults.size(), kMaxVisibleRows);
     ImGui::BeginChild("ScanResults", ImVec2(0.0f, listHeight), ImGuiChildFlags_Border);
     for (const auto& d : state.scanResults) {
       ImGui::PushID(d.uri.c_str());
