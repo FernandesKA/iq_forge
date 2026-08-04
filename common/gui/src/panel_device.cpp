@@ -53,6 +53,7 @@ void drawDevicePanel(AppState& state) {
     state.rxGainDb = kZero;
     state.rxGainMode = RxGainMode::Manual; // no hardware AGC on HackRF
     state.txChannel = 0; // HackRF has only one TX chain
+    state.rxChannel = 0; // HackRF has only one RX chain
   }
 
   ImGui::InputText("URI / Serial", state.uriBuffer, sizeof(state.uriBuffer));
@@ -65,6 +66,16 @@ void drawDevicePanel(AppState& state) {
     ImGui::SameLine();
     HelpMarker(
         "Which physical TX chain to transmit on. TX2 only works on units "
+        "running the AD9361 in 2T2R/dual-channel mode -- stock single-"
+        "channel Pluto firmware doesn't expose it and Connect will fail "
+        "with an error if selected.");
+
+    if (ImGui::RadioButton("RX1##rxchannel", state.rxChannel == 0)) state.rxChannel = 0;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("RX2##rxchannel", state.rxChannel == 1)) state.rxChannel = 1;
+    ImGui::SameLine();
+    HelpMarker(
+        "Which physical RX chain to receive on. RX2 only works on units "
         "running the AD9361 in 2T2R/dual-channel mode -- stock single-"
         "channel Pluto firmware doesn't expose it and Connect will fail "
         "with an error if selected.");
@@ -92,6 +103,7 @@ void drawDevicePanel(AppState& state) {
       cfg.rxGainDb = state.rxGainDb;
       cfg.rxGainMode = state.rxGainMode;
       cfg.txChannel = state.txChannel;
+      cfg.rxChannel = state.rxChannel;
       if (state.deviceManager.connect(cfg, state.connectError)) {
         state.log("Connected to " + state.deviceManager.device()->name());
         if (!state.connectError.empty()) {

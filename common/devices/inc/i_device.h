@@ -47,6 +47,10 @@ struct DeviceConfig {
   // mode (stock single-channel Pluto firmware doesn't expose it, in which
   // case open() fails with a clear error). Ignored by HackRF (single TX).
   int txChannel = 0;
+  // Pluto only: which physical RX chain to stream on -- 0 = RX1 (default),
+  // 1 = RX2. Same 2T2R/dual-channel firmware requirement as txChannel.
+  // Ignored by HackRF (single RX).
+  int rxChannel = 0;
 };
 
 using RxCallback = std::function<void(const Sample* data, size_t count)>;

@@ -18,8 +18,7 @@ constexpr float kHostToDevice = 32767.0f;
 constexpr float kDeviceToHost = 1.0f / 32768.0f;
 
 // channel selects which chain's phy control channel to return: 0 = TX1/RX1
-// ("voltage0"), 1 = TX2/RX2 ("voltage1"). RX always uses chain 0 -- only TX
-// channel selection is exposed today.
+// ("voltage0"), 1 = TX2/RX2 ("voltage1").
 iio_channel* findPhyChannel(iio_device* phy, bool output, int channel = 0) {
   return iio_device_find_channel(phy, channel == 1 ? "voltage1" : "voltage0", output);
 }
@@ -58,14 +57,18 @@ void checkedWriteLL(iio_channel* chn, const char* attr, long long value, std::ve
 } // namespace
 
 bool PlutoDevice::configurePhy(std::string& errorOut) {
-  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  iio_channel* rxPhy = findPhyChannel(phy_, false, cfg_.rxChannel);
   iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   iio_channel* rxLo = findLoChannel(phy_, false);
   iio_channel* txLo = findLoChannel(phy_, true);
   if (!rxPhy || !txPhy || !rxLo || !txLo) {
-    errorOut = cfg_.txChannel == 1
-        ? "Could not find AD9361 TX2 phy channel -- this unit's firmware may not be running in 2T2R/dual-channel mode"
-        : "Could not find AD9361 phy channels";
+    if (cfg_.txChannel == 1) {
+      errorOut = "Could not find AD9361 TX2 phy channel -- this unit's firmware may not be running in 2T2R/dual-channel mode";
+    } else if (cfg_.rxChannel == 1) {
+      errorOut = "Could not find AD9361 RX2 phy channel -- this unit's firmware may not be running in 2T2R/dual-channel mode";
+    } else {
+      errorOut = "Could not find AD9361 phy channels";
+    }
     return false;
   }
 
@@ -125,20 +128,26 @@ bool PlutoDevice::open(const DeviceConfig& cfg, std::string& errorOut) {
     return false;
   }
 
-  // TX2's I/Q streaming channels sit at voltage2/voltage3 on the same DDS
-  // core device, right after TX1's voltage0/voltage1 -- only present when
-  // the unit is running AD9361 in 2T2R/dual-channel mode.
+  // TX2/RX2's I/Q streaming channels sit at voltage2/voltage3 on the same
+  // device as chain 1's voltage0/voltage1 -- only present when the unit is
+  // running AD9361 in 2T2R/dual-channel mode.
+  const char* rxChanINam = cfg_.rxChannel == 1 ? "voltage2" : "voltage0";
+  const char* rxChanQNam = cfg_.rxChannel == 1 ? "voltage3" : "voltage1";
   const char* txChanINam = cfg_.txChannel == 1 ? "voltage2" : "voltage0";
   const char* txChanQNam = cfg_.txChannel == 1 ? "voltage3" : "voltage1";
 
-  rxChanI_ = iio_device_find_channel(rxDev_, "voltage0", false);
-  rxChanQ_ = iio_device_find_channel(rxDev_, "voltage1", false);
+  rxChanI_ = iio_device_find_channel(rxDev_, rxChanINam, false);
+  rxChanQ_ = iio_device_find_channel(rxDev_, rxChanQNam, false);
   txChanI_ = iio_device_find_channel(txDev_, txChanINam, true);
   txChanQ_ = iio_device_find_channel(txDev_, txChanQNam, true);
   if (!rxChanI_ || !rxChanQ_ || !txChanI_ || !txChanQ_) {
-    errorOut = cfg_.txChannel == 1
-        ? "PlutoSDR TX2 I/Q streaming channels not found -- this unit's firmware may not be running in 2T2R/dual-channel mode"
-        : "PlutoSDR context is missing expected I/Q streaming channels";
+    if (cfg_.txChannel == 1) {
+      errorOut = "PlutoSDR TX2 I/Q streaming channels not found -- this unit's firmware may not be running in 2T2R/dual-channel mode";
+    } else if (cfg_.rxChannel == 1) {
+      errorOut = "PlutoSDR RX2 I/Q streaming channels not found -- this unit's firmware may not be running in 2T2R/dual-channel mode";
+    } else {
+      errorOut = "PlutoSDR context is missing expected I/Q streaming channels";
+    }
     close();
     return false;
   }
@@ -153,7 +162,7 @@ bool PlutoDevice::open(const DeviceConfig& cfg, std::string& errorOut) {
 
 bool PlutoDevice::checkAlive() {
   if (!phy_) return false;
-  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  iio_channel* rxPhy = findPhyChannel(phy_, false, cfg_.rxChannel);
   if (!rxPhy) return false;
   long long value = 0;
   return iio_channel_attr_read_longlong(rxPhy, "sampling_frequency", &value) == 0;
@@ -300,7 +309,7 @@ bool PlutoDevice::setFrequency(double hz) {
 bool PlutoDevice::setSampleRate(double sps) {
   if (!phy_) return false;
   cfg_.sampleRateHz = sps;
-  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  iio_channel* rxPhy = findPhyChannel(phy_, false, cfg_.rxChannel);
   iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   if (!rxPhy || !txPhy) return false;
   bool ok = iio_channel_attr_write_longlong(rxPhy, "sampling_frequency", static_cast<long long>(sps)) == 0;
@@ -311,7 +320,7 @@ bool PlutoDevice::setSampleRate(double sps) {
 bool PlutoDevice::setBandwidth(double hz) {
   if (!phy_) return false;
   cfg_.bandwidthHz = hz;
-  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  iio_channel* rxPhy = findPhyChannel(phy_, false, cfg_.rxChannel);
   iio_channel* txPhy = findPhyChannel(phy_, true, cfg_.txChannel);
   if (!rxPhy || !txPhy) return false;
   bool ok = iio_channel_attr_write_longlong(rxPhy, "rf_bandwidth", static_cast<long long>(hz)) == 0;
@@ -331,7 +340,7 @@ bool PlutoDevice::setRxGain(double db) {
   if (!phy_) return false;
   cfg_.rxGainDb = db; // remembered regardless, so switching back to Manual re-applies it
   if (cfg_.rxGainMode != RxGainMode::Manual) return false; // AD9361 drives hardwaregain itself under AGC
-  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  iio_channel* rxPhy = findPhyChannel(phy_, false, cfg_.rxChannel);
   if (!rxPhy) return false;
   return iio_channel_attr_write_double(rxPhy, "hardwaregain", db) == 0;
 }
@@ -339,7 +348,7 @@ bool PlutoDevice::setRxGain(double db) {
 bool PlutoDevice::setRxGainMode(RxGainMode mode) {
   if (!phy_) return false;
   cfg_.rxGainMode = mode;
-  iio_channel* rxPhy = findPhyChannel(phy_, false);
+  iio_channel* rxPhy = findPhyChannel(phy_, false, cfg_.rxChannel);
   if (!rxPhy) return false;
   bool ok = iio_channel_attr_write(rxPhy, "gain_control_mode", gainControlModeString(mode)) >= 0;
   // Re-apply the last known gain immediately on switching back to Manual --

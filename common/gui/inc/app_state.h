@@ -45,6 +45,7 @@ struct AppState {
   double rxGainDb = 0.0;    // minimum RX gain
   RxGainMode rxGainMode = RxGainMode::AgcSlow; // PlutoSDR only -- HackRF has no AGC, always Manual there
   int txChannel = 0; // PlutoSDR only -- 0 = TX1 (default), 1 = TX2 (needs 2T2R firmware). Ignored by HackRF.
+  int rxChannel = 0; // PlutoSDR only -- 0 = RX1 (default), 1 = RX2 (needs 2T2R firmware). Ignored by HackRF.
   std::string connectError;
   std::vector<ScannedDevice> scanResults;
 
