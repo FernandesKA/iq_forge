@@ -16,13 +16,14 @@
 namespace iqforge {
 
 namespace {
-const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Pulse", "Barker", "Noise", "Ramp"};
+const char* kWaveformNames[] = {"Tone", "Multi-tone", "Chirp / sweep", "Pulse", "Barker", "Noise", "Ramp", "PRBS"};
 const char* kEnvelopeShapeNames[] = {"Rectangular", "Sinc (sin(x)/x)", "Gaussian", "Hann"};
 const char* kBarkerCodeNames[] = {
     "B2  [+ -]",       "B2  [+ +]",       "B3  [+ + -]",
     "B4  [+ + - +]",   "B4  [+ + + -]",   "B5  [+ + + - +]",
     "B7  [+ + + - - + -]", "B11 [+ + + - - - + - - + -]",
     "B13 [+ + + + + - - + + - + - +]"};
+const char* kPrbsPolynomialNames[] = {"PRBS7", "PRBS9", "PRBS11", "PRBS15", "PRBS23", "PRBS31"};
 
 bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
   const double nyquistHz = std::abs(sampleRateHz) * 0.5;
@@ -45,6 +46,14 @@ bool clampGeneratorFrequencies(GeneratorConfig& cfg, double sampleRateHz) {
   const double clampedChipRate = std::clamp(cfg.barkerChipRateHz, 0.0, std::abs(sampleRateHz));
   if (clampedChipRate != cfg.barkerChipRateHz) {
     cfg.barkerChipRateHz = clampedChipRate;
+    changed = true;
+  }
+  // QPSK packs 2 bits/symbol, so its symbol rate (bitRate/2) can go up to a
+  // full sample rate before either endpoint exceeds Nyquist.
+  const double maxPrbsBitRateHz = cfg.prbsQpskEnabled ? 2.0 * std::abs(sampleRateHz) : std::abs(sampleRateHz);
+  const double clampedPrbsBitRate = std::clamp(cfg.prbsBitRateHz, 0.0, maxPrbsBitRateHz);
+  if (clampedPrbsBitRate != cfg.prbsBitRateHz) {
+    cfg.prbsBitRateHz = clampedPrbsBitRate;
     changed = true;
   }
   const double clampedPeriod = cfg.pulsePeriodSec > 0.0 ? cfg.pulsePeriodSec : 1e-6;
@@ -143,6 +152,23 @@ void drawTxPanel(AppState& state) {
       case WaveformType::Noise:
       case WaveformType::Ramp:
         break;
+      case WaveformType::Prbs: {
+        int poly = static_cast<int>(state.genConfig.prbsPolynomial);
+        if (ImGui::Combo("PRBS polynomial", &poly, kPrbsPolynomialNames, IM_ARRAYSIZE(kPrbsPolynomialNames))) {
+          state.genConfig.prbsPolynomial = static_cast<PrbsPolynomial>(poly);
+          generatorChanged = true;
+        }
+        generatorChanged |=
+            FrequencyInputHz("Bit rate", &state.genConfig.prbsBitRateHz, &state.prbsBitRateUnit);
+        generatorChanged |= ImGui::Checkbox("QPSK + RRC shaping", &state.genConfig.prbsQpskEnabled);
+        ImGui::TextDisabled(
+            "Off: raw bipolar bit stream (like Barker). On: bit pairs -> QPSK symbols -> "
+            "root-raised-cosine pulse shaping -> IQ, e.g. for FPGA/demodulator testing.");
+        if (state.genConfig.prbsQpskEnabled) {
+          generatorChanged |= ImGui::SliderFloat("RRC roll-off", &state.genConfig.prbsRrcRolloff, 0.0f, 1.0f);
+        }
+        break;
+      }
     }
 
     // Any non-Pulse waveform can optionally be gated by the same shaped
@@ -160,6 +186,9 @@ void drawTxPanel(AppState& state) {
     generatorChanged |= clampGeneratorFrequencies(state.genConfig, state.sampleRateHz);
     if (state.genConfig.type == WaveformType::Barker) {
       ImGui::TextDisabled("Allowed chip rate: 0 .. %.6g MHz", std::abs(state.sampleRateHz) / 1e6);
+    } else if (state.genConfig.type == WaveformType::Prbs) {
+      double maxBitRateHz = state.genConfig.prbsQpskEnabled ? 2.0 * std::abs(state.sampleRateHz) : std::abs(state.sampleRateHz);
+      ImGui::TextDisabled("Allowed bit rate: 0 .. %.6g MHz", maxBitRateHz / 1e6);
     } else if (state.genConfig.type == WaveformType::Chirp) {
       ImGui::TextDisabled("Allowed deviation: %.6g .. +%.6g MHz",
                           -std::abs(state.sampleRateHz) / 1e6, std::abs(state.sampleRateHz) / 1e6);

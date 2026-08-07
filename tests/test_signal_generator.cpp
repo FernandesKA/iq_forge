@@ -304,6 +304,114 @@ void run_signal_generator_tests() {
     }
   }
 
+  // PRBS (raw bit stream): every bit must be a hard +-amplitude chip (no
+  // QPSK/RRC shaping), and short-order polynomials must reproduce their
+  // exact 2^order - 1 maximal-length sequence -- every nonzero lag
+  // autocorrelation near 0 (an m-sequence property), not just "looks random".
+  {
+    struct PrbsCase {
+      PrbsPolynomial poly;
+      int order;
+    };
+    const std::vector<PrbsCase> cases = {
+        {PrbsPolynomial::Prbs7, 7},
+        {PrbsPolynomial::Prbs9, 9},
+        {PrbsPolynomial::Prbs11, 11},
+    };
+    for (const PrbsCase& test : cases) {
+      GeneratorConfig cfg;
+      cfg.type = WaveformType::Prbs;
+      cfg.sampleRateHz = sampleRate;
+      cfg.prbsBitRateHz = sampleRate; // 1 sample/bit
+      cfg.prbsPolynomial = test.poly;
+      cfg.amplitude = 1.0f;
+      SignalGenerator gen(cfg);
+
+      const size_t period = (1u << test.order) - 1u;
+      std::vector<Sample> buf(period * 2);
+      gen.generate(buf.data(), buf.size());
+
+      std::vector<int> chips(period);
+      for (size_t i = 0; i < period; ++i) {
+        CHECK(buf[i].real() == 1.0f || buf[i].real() == -1.0f);
+        CHECK(buf[i].imag() == 0.0f);
+        chips[i] = buf[i].real() > 0.0f ? 1 : -1;
+      }
+      // Sequence must repeat exactly with the polynomial's period.
+      for (size_t i = 0; i < period; ++i) {
+        CHECK(buf[period + i].real() == buf[i].real());
+      }
+      // Maximal-length autocorrelation: near-zero at every nonzero lag.
+      for (size_t lag = 1; lag < period; lag += std::max<size_t>(1, period / 20)) {
+        long correlation = 0;
+        for (size_t i = 0; i < period; ++i) correlation += chips[i] * chips[(i + lag) % period];
+        CHECK(std::abs(correlation) <= 1);
+      }
+    }
+  }
+
+  // PRBS is deterministic from its fixed seed: reconstructing a generator
+  // with the same config must reproduce the same bit sequence, which is the
+  // whole point of using it to test a signal path (a known, repeatable
+  // pattern the far end can verify against).
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Prbs;
+    cfg.sampleRateHz = sampleRate;
+    cfg.prbsBitRateHz = sampleRate;
+    cfg.prbsPolynomial = PrbsPolynomial::Prbs31;
+    cfg.amplitude = 1.0f;
+
+    SignalGenerator genA(cfg);
+    SignalGenerator genB(cfg);
+    std::vector<Sample> bufA(5000), bufB(5000);
+    genA.generate(bufA.data(), bufA.size());
+    genB.generate(bufB.data(), bufB.size());
+    CHECK(bufA == bufB);
+    bool allSame = std::all_of(bufA.begin(), bufA.end(), [&](const Sample& s) { return s == bufA.front(); });
+    CHECK(!allSame);
+  }
+
+  // PRBS + QPSK/RRC shaping: bit pairs become QPSK symbols pulse-shaped by a
+  // root-raised-cosine filter, so the output should be complex (both I and Q
+  // active, unlike the raw real bit stream above), stay reasonably bounded,
+  // and its bandwidth should scale up with a wider roll-off (more excess
+  // bandwidth spreads the same symbol rate over more spectrum).
+  {
+    auto occupiedBandwidthBins = [&](float rolloff) {
+      GeneratorConfig cfg;
+      cfg.type = WaveformType::Prbs;
+      cfg.sampleRateHz = sampleRate;
+      cfg.prbsPolynomial = PrbsPolynomial::Prbs15;
+      cfg.prbsQpskEnabled = true;
+      cfg.prbsBitRateHz = sampleRate / 8.0; // symbol rate = bitRate/2 = Fs/16
+      cfg.prbsRrcRolloff = rolloff;
+      cfg.amplitude = 1.0f;
+      SignalGenerator gen(cfg);
+
+      std::vector<Sample> buf(fftSize);
+      gen.generate(buf.data(), buf.size());
+
+      bool haveQ = std::any_of(buf.begin(), buf.end(), [](const Sample& s) { return s.imag() != 0.0f; });
+      CHECK(haveQ);
+      for (const auto& s : buf) CHECK(std::abs(s) < 2.0f); // bounded despite RRC overshoot
+
+      FftProcessor fft({fftSize, WindowType::Hann, 1.0f});
+      std::vector<float> db;
+      fft.process(buf.data(), buf.size(), db);
+      float peakDb = *std::max_element(db.begin(), db.end());
+      size_t count = 0;
+      for (float v : db) {
+        if (v >= peakDb - 20.0f) ++count;
+      }
+      return count;
+    };
+
+    size_t narrowBins = occupiedBandwidthBins(0.05f);
+    size_t wideBins = occupiedBandwidthBins(0.9f);
+    CHECK(wideBins > narrowBins);
+  }
+
   // Shaped envelopes (Sinc/Gaussian/Hann): still 0 outside [0, duration) like
   // Rectangular, but peak at the window center and taper towards its edges
   // instead of switching abruptly.

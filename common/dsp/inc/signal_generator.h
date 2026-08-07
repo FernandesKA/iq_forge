@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <deque>
 #include <mutex>
 #include <random>
 #include <vector>
@@ -16,6 +18,7 @@ enum class WaveformType {
   Barker,
   Noise,
   Ramp,
+  Prbs,
 };
 
 // Shape of the pulse/envelope gate applied over [0, pulseDurationSec) of
@@ -41,6 +44,17 @@ enum class BarkerCode {
   B7,
   B11,
   B13,
+};
+
+// Standard ITU-T/test-equipment maximal-length PRBS polynomials, named by
+// their LFSR order (sequence period is 2^order - 1 bits).
+enum class PrbsPolynomial {
+  Prbs7,
+  Prbs9,
+  Prbs11,
+  Prbs15,
+  Prbs23,
+  Prbs31,
 };
 
 struct GeneratorConfig {
@@ -76,6 +90,19 @@ struct GeneratorConfig {
   // WaveformType::Pulse, which always applies its own gating.
   bool envelopeEnabled = false;
 
+  // PRBS: a continuously repeated pseudorandom bit sequence from an LFSR of
+  // the selected standard polynomial -- useful for testing signal paths
+  // because the bit pattern and its period (2^order - 1 bits) are exactly
+  // known ahead of time. With prbsQpskEnabled false, bits directly BPSK the
+  // carrier (one +-amplitude chip per bit, like Barker above). With it true,
+  // bit pairs map to QPSK symbols which are pulse-shaped by a root-raised-
+  // cosine filter, e.g. for feeding a known bit pattern into an FPGA/
+  // demodulator under test: PRBS -> QPSK -> RRC -> IQ.
+  PrbsPolynomial prbsPolynomial = PrbsPolynomial::Prbs15;
+  double prbsBitRateHz = 100e3;
+  bool prbsQpskEnabled = false;
+  float prbsRrcRolloff = 0.35f; // 0..1, root-raised-cosine excess bandwidth
+
   float amplitude = 0.7f; // 0..1, leaves headroom to avoid clipping downstream
 };
 
@@ -98,7 +125,18 @@ class SignalGenerator : public ISampleSource {
   void generateBarker(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateNoise(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generateRamp(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void generatePrbs(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void generatePrbsBpsk(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void generatePrbsQpsk(Sample* out, size_t count, const GeneratorConfig& cfg);
   void applyEnvelope(Sample* out, size_t count, const GeneratorConfig& cfg);
+
+  // (Re)seeds the LFSR and, for the QPSK path, refills the RRC symbol
+  // window -- called whenever the PRBS waveform is (re)selected or its
+  // polynomial/mode changes, since the two paths consume bits at different
+  // rates (1 bit/chip vs. 2 bits/symbol) and can't share mid-sequence state.
+  void resetPrbsState(const GeneratorConfig& cfg);
+  int nextPrbsBit();
+  Sample nextPrbsQpskSymbol();
 
   mutable std::mutex cfgMutex_;
   GeneratorConfig cfg_;
@@ -110,6 +148,17 @@ class SignalGenerator : public ISampleSource {
   size_t barkerChipIndex_ = 0;
   double barkerChipPhase_ = 0.0;
   float rampValue_ = -1.0f;
+
+  uint32_t prbsReg_ = 0;
+  int prbsOrder_ = 0;
+  int prbsTap_ = 0;
+  bool prbsInitialized_ = false;
+  PrbsPolynomial prbsActivePolynomial_ = PrbsPolynomial::Prbs15;
+  bool prbsQpskActive_ = false;
+  double prbsBitPhase_ = 0.0;
+  int prbsCurrentBit_ = 0;
+  double prbsSymbolPhase_ = 0.0;
+  std::deque<Sample> prbsSymbolWindow_;
 
   std::mt19937 rng_{std::random_device{}()};
   std::normal_distribution<float> noiseDist_{0.0f, 1.0f};

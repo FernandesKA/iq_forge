@@ -136,6 +136,7 @@ const char* waveformName(WaveformType t) {
     case WaveformType::Barker: return "Barker";
     case WaveformType::Noise: return "Noise";
     case WaveformType::Ramp: return "Ramp";
+    case WaveformType::Prbs: return "Prbs";
   }
   return "Tone";
 }
@@ -147,6 +148,28 @@ WaveformType waveformFromName(const std::string& s, WaveformType fallback) {
   if (s == "Barker") return WaveformType::Barker;
   if (s == "Noise") return WaveformType::Noise;
   if (s == "Ramp") return WaveformType::Ramp;
+  if (s == "Prbs") return WaveformType::Prbs;
+  return fallback;
+}
+
+const char* prbsPolynomialName(PrbsPolynomial p) {
+  switch (p) {
+    case PrbsPolynomial::Prbs7: return "Prbs7";
+    case PrbsPolynomial::Prbs9: return "Prbs9";
+    case PrbsPolynomial::Prbs11: return "Prbs11";
+    case PrbsPolynomial::Prbs15: return "Prbs15";
+    case PrbsPolynomial::Prbs23: return "Prbs23";
+    case PrbsPolynomial::Prbs31: return "Prbs31";
+  }
+  return "Prbs15";
+}
+PrbsPolynomial prbsPolynomialFromName(const std::string& s, PrbsPolynomial fallback) {
+  if (s == "Prbs7") return PrbsPolynomial::Prbs7;
+  if (s == "Prbs9") return PrbsPolynomial::Prbs9;
+  if (s == "Prbs11") return PrbsPolynomial::Prbs11;
+  if (s == "Prbs15") return PrbsPolynomial::Prbs15;
+  if (s == "Prbs23") return PrbsPolynomial::Prbs23;
+  if (s == "Prbs31") return PrbsPolynomial::Prbs31;
   return fallback;
 }
 
@@ -243,6 +266,11 @@ nlohmann::json settingsToJson(const AppState& state) {
   gen["pulsePeriodUnit"] = timeUnitName(state.pulsePeriodUnit);
   gen["envelopeShape"] = envelopeShapeName(g.envelopeShape);
   gen["envelopeEnabled"] = g.envelopeEnabled;
+  gen["prbsPolynomial"] = prbsPolynomialName(g.prbsPolynomial);
+  gen["prbsBitRateHz"] = g.prbsBitRateHz;
+  gen["prbsBitRateUnit"] = freqUnitName(state.prbsBitRateUnit);
+  gen["prbsQpskEnabled"] = g.prbsQpskEnabled;
+  gen["prbsRrcRolloff"] = g.prbsRrcRolloff;
   gen["amplitude"] = g.amplitude;
 
   nlohmann::json file;
@@ -317,6 +345,11 @@ void applySettingsJson(AppState& state, const nlohmann::json& j) {
       state.pulsePeriodUnit = timeUnitFromName(gen.value("pulsePeriodUnit", std::string()), state.pulsePeriodUnit);
       g.envelopeShape = envelopeShapeFromName(gen.value("envelopeShape", std::string()), g.envelopeShape);
       g.envelopeEnabled = gen.value("envelopeEnabled", g.envelopeEnabled);
+      g.prbsPolynomial = prbsPolynomialFromName(gen.value("prbsPolynomial", std::string()), g.prbsPolynomial);
+      g.prbsBitRateHz = gen.value("prbsBitRateHz", g.prbsBitRateHz);
+      state.prbsBitRateUnit = freqUnitFromName(gen.value("prbsBitRateUnit", std::string()), state.prbsBitRateUnit);
+      g.prbsQpskEnabled = gen.value("prbsQpskEnabled", g.prbsQpskEnabled);
+      g.prbsRrcRolloff = gen.value("prbsRrcRolloff", g.prbsRrcRolloff);
       g.amplitude = gen.value("amplitude", g.amplitude);
       g.sampleRateHz = state.sampleRateHz;
       state.genConfig = g;

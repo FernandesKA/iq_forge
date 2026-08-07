@@ -67,6 +67,7 @@ struct AppState {
   FreqUnit chirpDeviationUnit = FreqUnit::kHz;
   TimeUnit chirpDurationUnit = TimeUnit::Ms;
   FreqUnit barkerChipRateUnit = FreqUnit::kHz;
+  FreqUnit prbsBitRateUnit = FreqUnit::kHz;
   TimeUnit pulseDurationUnit = TimeUnit::Us;
   TimeUnit pulsePeriodUnit = TimeUnit::Us;
   char filePathBuffer[512] = "";

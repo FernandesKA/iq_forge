@@ -58,6 +58,12 @@ GeneratorConfig clampBasebandFrequencies(GeneratorConfig cfg) {
   cfg.barkerChipRateHz = std::clamp(cfg.barkerChipRateHz, 0.0, maxChipRateHz);
   cfg.pulsePeriodSec = cfg.pulsePeriodSec > 0.0 ? cfg.pulsePeriodSec : 1e-6;
   cfg.pulseDurationSec = std::clamp(cfg.pulseDurationSec, 0.0, cfg.pulsePeriodSec);
+  // QPSK packs 2 bits/symbol, so the symbol rate (which must stay below
+  // Nyquist for the RRC filter to make sense) is half the bit rate --
+  // letting the bit rate itself run up to 2x sample rate in that mode.
+  const double maxBitRateHz = cfg.prbsQpskEnabled ? 2.0 * maxChipRateHz : maxChipRateHz;
+  cfg.prbsBitRateHz = std::clamp(cfg.prbsBitRateHz, 0.0, maxBitRateHz);
+  cfg.prbsRrcRolloff = std::clamp(cfg.prbsRrcRolloff, 0.0f, 1.0f);
   return cfg;
 }
 
@@ -85,6 +91,71 @@ const std::vector<int>& barkerChips(BarkerCode code) {
   }
   return b13;
 }
+
+// order/tap of the standard maximal-length polynomial x^order + x^tap + 1
+// used by test equipment for each named PRBS sequence.
+struct PrbsSpec {
+  int order;
+  int tap;
+};
+
+PrbsSpec prbsSpec(PrbsPolynomial p) {
+  switch (p) {
+    case PrbsPolynomial::Prbs7: return {7, 6};
+    case PrbsPolynomial::Prbs9: return {9, 5};
+    case PrbsPolynomial::Prbs11: return {11, 9};
+    case PrbsPolynomial::Prbs15: return {15, 14};
+    case PrbsPolynomial::Prbs23: return {23, 18};
+    case PrbsPolynomial::Prbs31: return {31, 28};
+  }
+  return {15, 14};
+}
+
+// One Galois-LFSR step for the trinomial x^order + x^tap + 1: shifts right,
+// XOR-ing in the tap mask whenever the bit shifted out was 1. Register stays
+// within [0, 2^order) on its own -- both XOR'd bits (order-1 and
+// order-1-tap) fall inside that range, so no masking is needed. Returns the
+// bit shifted out.
+int lfsrStep(uint32_t& reg, int order, int tap) {
+  const uint32_t outBit = reg & 1u;
+  reg >>= 1;
+  if (outBit) {
+    reg ^= (1u << (order - 1));
+    reg ^= (1u << (order - 1 - tap));
+  }
+  return static_cast<int>(outBit);
+}
+
+// Root-raised-cosine impulse response shape at normalized time tau = t/Tsym,
+// peak-normalized so h(0) == 1 (the overall gain is controlled separately by
+// GeneratorConfig::amplitude, so absolute filter energy doesn't matter here).
+// beta == 0 degenerates to an ideal (brick-wall) Nyquist sinc pulse.
+double rrcShape(double tau, double beta) {
+  if (beta <= 1e-6) {
+    return tau == 0.0 ? 1.0 : std::sin(kPi * tau) / (kPi * tau);
+  }
+  if (std::abs(tau) < 1e-9) {
+    return 1.0; // peak-normalized: true value here is 1 - beta + 4*beta/pi
+  }
+  const double denomArg = 4.0 * beta * tau;
+  if (std::abs(std::abs(denomArg) - 1.0) < 1e-8) {
+    // Removable singularity at tau = +-1/(4*beta); use the closed-form limit.
+    const double c = kPi / (4.0 * beta);
+    const double peak = 1.0 - beta + 4.0 * beta / kPi;
+    const double v = (beta / std::sqrt(2.0)) * ((1.0 + 2.0 / kPi) * std::sin(c) + (1.0 - 2.0 / kPi) * std::cos(c));
+    return v / peak;
+  }
+  const double peak = 1.0 - beta + 4.0 * beta / kPi;
+  const double num = std::sin(kPi * tau * (1.0 - beta)) + denomArg * std::cos(kPi * tau * (1.0 + beta));
+  const double den = kPi * tau * (1.0 - denomArg * denomArg);
+  return (num / den) / peak;
+}
+
+// Symbols within +-kRrcHalfSpanSymbols of the current one are summed to
+// evaluate the pulse-shaping filter at each output sample -- wide enough to
+// capture the RRC tail down to a small fraction of its peak even at low
+// roll-off, cheap enough (2*span+1 taps) to do per sample.
+constexpr int kRrcHalfSpanSymbols = 6;
 } // namespace
 
 SignalGenerator::SignalGenerator(GeneratorConfig cfg) : cfg_(clampBasebandFrequencies(std::move(cfg))) {
@@ -113,6 +184,14 @@ size_t SignalGenerator::generate(Sample* out, size_t count) {
     multiTonePhases_.resize(cfg.multiToneFreqsHz.size(), 0.0);
   }
 
+  // The raw-bit and QPSK paths consume PRBS bits at different rates and
+  // can't share mid-sequence LFSR/window state, so switching polynomial or
+  // mode restarts the sequence from its fixed all-ones seed.
+  if (cfg.type == WaveformType::Prbs &&
+      (!prbsInitialized_ || prbsActivePolynomial_ != cfg.prbsPolynomial || prbsQpskActive_ != cfg.prbsQpskEnabled)) {
+    resetPrbsState(cfg);
+  }
+
   switch (cfg.type) {
     case WaveformType::Tone: generateTone(out, count, cfg); break;
     case WaveformType::MultiTone: generateMultiTone(out, count, cfg); break;
@@ -121,6 +200,7 @@ size_t SignalGenerator::generate(Sample* out, size_t count) {
     case WaveformType::Barker: generateBarker(out, count, cfg); break;
     case WaveformType::Noise: generateNoise(out, count, cfg); break;
     case WaveformType::Ramp: generateRamp(out, count, cfg); break;
+    case WaveformType::Prbs: generatePrbs(out, count, cfg); break;
   }
 
   // Pulse always gates itself; any other waveform can opt into the same
@@ -236,6 +316,90 @@ void SignalGenerator::generateRamp(Sample* out, size_t count, const GeneratorCon
     if (v > 1.0f) v -= 2.0f;
   }
   rampValue_ = v;
+}
+
+void SignalGenerator::resetPrbsState(const GeneratorConfig& cfg) {
+  const PrbsSpec spec = prbsSpec(cfg.prbsPolynomial);
+  prbsOrder_ = spec.order;
+  prbsTap_ = spec.tap;
+  prbsReg_ = (prbsOrder_ >= 32) ? 0xFFFFFFFFu : ((1u << prbsOrder_) - 1u); // all-ones: standard nonzero seed
+  prbsBitPhase_ = 0.0;
+  prbsCurrentBit_ = nextPrbsBit();
+  prbsSymbolPhase_ = 0.0;
+  prbsSymbolWindow_.clear();
+  if (cfg.prbsQpskEnabled) {
+    for (int i = 0; i < 2 * kRrcHalfSpanSymbols + 1; ++i) {
+      prbsSymbolWindow_.push_back(nextPrbsQpskSymbol());
+    }
+  }
+  prbsActivePolynomial_ = cfg.prbsPolynomial;
+  prbsQpskActive_ = cfg.prbsQpskEnabled;
+  prbsInitialized_ = true;
+}
+
+int SignalGenerator::nextPrbsBit() { return lfsrStep(prbsReg_, prbsOrder_, prbsTap_); }
+
+Sample SignalGenerator::nextPrbsQpskSymbol() {
+  constexpr float kInvSqrt2 = 0.70710678118654752f;
+  const int i = nextPrbsBit();
+  const int q = nextPrbsBit();
+  return Sample(i ? kInvSqrt2 : -kInvSqrt2, q ? kInvSqrt2 : -kInvSqrt2);
+}
+
+void SignalGenerator::generatePrbs(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  if (cfg.prbsQpskEnabled) {
+    generatePrbsQpsk(out, count, cfg);
+  } else {
+    generatePrbsBpsk(out, count, cfg);
+  }
+}
+
+void SignalGenerator::generatePrbsBpsk(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  if (cfg.sampleRateHz <= 0.0 || cfg.prbsBitRateHz <= 0.0) {
+    std::fill(out, out + count, Sample(0.0f, 0.0f));
+    return;
+  }
+  const double bitsPerSample = cfg.prbsBitRateHz / cfg.sampleRateHz;
+  double bitPhase = prbsBitPhase_;
+  int bit = prbsCurrentBit_;
+  for (size_t i = 0; i < count; ++i) {
+    out[i] = Sample(bit ? cfg.amplitude : -cfg.amplitude, 0.0f);
+    bitPhase += bitsPerSample;
+    while (bitPhase >= 1.0) {
+      bitPhase -= 1.0;
+      bit = nextPrbsBit();
+    }
+  }
+  prbsBitPhase_ = bitPhase;
+  prbsCurrentBit_ = bit;
+}
+
+void SignalGenerator::generatePrbsQpsk(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  const double symbolRateHz = cfg.prbsBitRateHz / 2.0; // QPSK: 2 bits/symbol
+  if (cfg.sampleRateHz <= 0.0 || symbolRateHz <= 0.0 || prbsSymbolWindow_.size() != static_cast<size_t>(2 * kRrcHalfSpanSymbols + 1)) {
+    std::fill(out, out + count, Sample(0.0f, 0.0f));
+    return;
+  }
+  const double symbolStep = symbolRateHz / cfg.sampleRateHz; // symbols per output sample
+  const double beta = cfg.prbsRrcRolloff;
+
+  double phase = prbsSymbolPhase_;
+  for (size_t i = 0; i < count; ++i) {
+    Sample acc(0.0f, 0.0f);
+    for (int j = -kRrcHalfSpanSymbols; j <= kRrcHalfSpanSymbols; ++j) {
+      const double tau = j + phase; // time offset to that symbol, in symbol periods
+      const float h = static_cast<float>(rrcShape(tau, beta));
+      acc += prbsSymbolWindow_[kRrcHalfSpanSymbols + j] * h;
+    }
+    out[i] = acc * cfg.amplitude;
+    phase += symbolStep;
+    if (phase >= 1.0) {
+      phase -= 1.0;
+      prbsSymbolWindow_.pop_front();
+      prbsSymbolWindow_.push_back(nextPrbsQpskSymbol());
+    }
+  }
+  prbsSymbolPhase_ = phase;
 }
 
 } // namespace iqforge
