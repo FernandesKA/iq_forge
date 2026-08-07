@@ -224,6 +224,19 @@ struct AppState {
   SvSaveFormat svSaveFormat = SvSaveFormat::Sigmf;
   char svSavePathBuffer[512] = "";
 
+  // --- Main-area tab visibility (Settings panel) ---
+  // Whether each plot/preview window is drawn at all this frame -- simply
+  // skipping its Begin()/End() call, rather than an ImGui p_open close
+  // button, is enough to hide it from the main-area tab bar entirely; it
+  // keeps its docked position for whenever it's turned back on. Independent
+  // of the *Control panels on the left, which always stay available since
+  // they're configuration, not a per-mode view. SpectrumViewer defaults to
+  // off since it's the least commonly used of the four.
+  bool showTxTab = true;
+  bool showRxTab = true;
+  bool showSignalViewerTab = true;
+  bool showSpectrumViewerTab = false;
+
   // --- Log ---
   std::mutex logMutex;
   std::deque<std::string> logMessages;

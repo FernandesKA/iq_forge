@@ -79,9 +79,7 @@ SigmfMeta buildSigmfMeta(const AppState& state) {
 }
 } // namespace
 
-void drawRxPanel(AppState& state) {
-  ImGui::Begin("RX Control");
-
+void drawRxControlContents(AppState& state) {
   bool connected = state.deviceManager.isConnected();
   bool active = state.isRxActive();
 
@@ -156,8 +154,6 @@ void drawRxPanel(AppState& state) {
     }
   }
   ImGui::EndDisabled();
-
-  ImGui::End();
 }
 
 } // namespace iqforge

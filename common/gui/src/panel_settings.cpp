@@ -29,6 +29,18 @@ void drawSettingsPanel(AppState& state) {
       "always be saved and loaded regardless of this setting.");
 
   ImGui::Separator();
+  ImGui::TextUnformatted("Main area tabs");
+  ImGui::SameLine();
+  HelpMarker("Which plot/preview windows show up in the main area's tab bar. Each *Control panel on the left stays available regardless.");
+  ImGui::Checkbox("TX##showtab", &state.showTxTab);
+  sameLineOrWrap(wrapButtonWidth("RX##showtab"));
+  ImGui::Checkbox("RX##showtab", &state.showRxTab);
+  sameLineOrWrap(wrapButtonWidth("Signal Viewer##showtab"));
+  ImGui::Checkbox("Signal Viewer##showtab", &state.showSignalViewerTab);
+  sameLineOrWrap(wrapButtonWidth("SpectrumViewer##showtab"));
+  ImGui::Checkbox("SpectrumViewer##showtab", &state.showSpectrumViewerTab);
+
+  ImGui::Separator();
   ImGui::TextUnformatted("Presets");
 
   // Cached rather than re-read from disk every frame; refreshed explicitly

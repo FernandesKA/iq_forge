@@ -14,9 +14,7 @@
 
 namespace iqforge {
 
-void drawSignalViewerPanel(AppState& state) {
-  ImGui::Begin("Signal Viewer Control");
-
+void drawSignalViewerControlContents(AppState& state) {
   ImGui::TextDisabled("Preview, resample, and save IQ files -- no device connection needed.");
   ImGui::Separator();
 
@@ -170,8 +168,6 @@ void drawSignalViewerPanel(AppState& state) {
     }
   }
   ImGui::EndDisabled();
-
-  ImGui::End();
 }
 
 } // namespace iqforge

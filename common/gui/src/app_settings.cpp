@@ -302,6 +302,13 @@ nlohmann::json settingsToJson(const AppState& state) {
   rx["recordDescription"] = std::string(state.rxRecordDescriptionBuffer);
   j["rx"] = std::move(rx);
 
+  nlohmann::json ui;
+  ui["showTxTab"] = state.showTxTab;
+  ui["showRxTab"] = state.showRxTab;
+  ui["showSignalViewerTab"] = state.showSignalViewerTab;
+  ui["showSpectrumViewerTab"] = state.showSpectrumViewerTab;
+  j["ui"] = std::move(ui);
+
   nlohmann::json sv;
   sv["path"] = std::string(state.svFilePathBuffer);
   sv["loop"] = state.svLoop;
@@ -392,6 +399,14 @@ void applySettingsJson(AppState& state, const nlohmann::json& j) {
     state.rxSaveFormat = rxSaveFormatFromName(rx.value("saveFormat", std::string()), state.rxSaveFormat);
     setBuf(state.rxRecordPathBuffer, rx.value("recordPath", std::string(state.rxRecordPathBuffer)));
     setBuf(state.rxRecordDescriptionBuffer, rx.value("recordDescription", std::string(state.rxRecordDescriptionBuffer)));
+  }
+
+  if (j.contains("ui")) {
+    const auto& ui = j.at("ui");
+    state.showTxTab = ui.value("showTxTab", state.showTxTab);
+    state.showRxTab = ui.value("showRxTab", state.showRxTab);
+    state.showSignalViewerTab = ui.value("showSignalViewerTab", state.showSignalViewerTab);
+    state.showSpectrumViewerTab = ui.value("showSpectrumViewerTab", state.showSpectrumViewerTab);
   }
 
   if (j.contains("signalViewer")) {

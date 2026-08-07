@@ -86,9 +86,7 @@ bool drawEnvelopeShapeAndTiming(AppState& state) {
 }
 }
 
-void drawTxPanel(AppState& state) {
-  ImGui::Begin("TX Control");
-
+void drawTxControlContents(AppState& state) {
   bool connected = state.deviceManager.isConnected();
   bool active = state.isTxActive();
 
@@ -386,8 +384,6 @@ void drawTxPanel(AppState& state) {
   if (!state.txError.empty()) {
     ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s", state.txError.c_str());
   }
-
-  ImGui::End();
 }
 
 } // namespace iqforge

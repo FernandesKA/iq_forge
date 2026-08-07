@@ -47,9 +47,11 @@ add_executable(iqforge
   gui/src/file_browser.cpp
   gui/src/load_progress.cpp
   gui/src/panel_device.cpp
+  gui/src/panel_control.cpp
   gui/src/panel_tx.cpp
   gui/src/panel_rx.cpp
   gui/src/panel_signal_viewer.cpp
+  gui/src/dock_tab_utils.cpp
   gui/src/panel_visualization.cpp
   gui/src/panel_spectrum_viewer.cpp
   gui/src/plot_time_domain.cpp

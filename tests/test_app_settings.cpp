@@ -65,6 +65,11 @@ void fillDistinctive(AppState& s) {
   s.svResampleCoefficient = 0.75;
   s.svSaveFormat = AppState::SvSaveFormat::Cf32Raw;
   std::snprintf(s.svSavePathBuffer, sizeof(s.svSavePathBuffer), "/tmp/sv_out.cf32");
+
+  s.showTxTab = false;
+  s.showRxTab = false;
+  s.showSignalViewerTab = false;
+  s.showSpectrumViewerTab = true;
 }
 
 void checkMatchesDistinctive(const AppState& s) {
@@ -110,6 +115,11 @@ void checkMatchesDistinctive(const AppState& s) {
   CHECK(s.svResampleCoefficient == 0.75);
   CHECK(s.svSaveFormat == AppState::SvSaveFormat::Cf32Raw);
   CHECK(std::string(s.svSavePathBuffer) == "/tmp/sv_out.cf32");
+
+  CHECK(s.showTxTab == false);
+  CHECK(s.showRxTab == false);
+  CHECK(s.showSignalViewerTab == false);
+  CHECK(s.showSpectrumViewerTab == true);
 }
 } // namespace
 
