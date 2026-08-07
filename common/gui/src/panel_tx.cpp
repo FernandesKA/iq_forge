@@ -180,6 +180,14 @@ void drawTxControlContents(AppState& state) {
       }
     }
 
+    // Mixes noise onto whatever waveform is configured, at the requested
+    // SNR relative to Amplitude above -- for testing a receive path under a
+    // controlled degraded SNR instead of a clean signal.
+    generatorChanged |= ImGui::Checkbox("Add noise", &state.genConfig.noiseEnabled);
+    if (state.genConfig.noiseEnabled) {
+      generatorChanged |= ImGui::SliderFloat("SNR (dB)", &state.genConfig.noiseSnrDb, -20.0f, 60.0f, "%.1f");
+    }
+
     // Complex IQ can represent baseband offsets only inside the Nyquist
     // interval. Values outside it would wrap to an unexpected RF frequency.
     generatorChanged |= clampGeneratorFrequencies(state.genConfig, state.sampleRateHz);

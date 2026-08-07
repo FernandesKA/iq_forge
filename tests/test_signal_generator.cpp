@@ -437,4 +437,57 @@ void run_signal_generator_tests() {
       }
     }
   }
+
+  // Add noise: average total power E[|signal + noise|^2] should land near
+  // signalPower + noisePower (cross term averages to ~0 over enough
+  // samples, since the added noise is zero-mean and independent of the
+  // deterministic tone) -- i.e. the requested SNR is actually honored, not
+  // just "some noise gets added somewhere".
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Tone;
+    cfg.sampleRateHz = sampleRate;
+    cfg.toneFreqHz = sampleRate / 8.0;
+    cfg.amplitude = 1.0f;
+    cfg.noiseEnabled = true;
+    cfg.noiseSnrDb = 10.0f;
+    SignalGenerator gen(cfg);
+
+    std::vector<Sample> buf(200000);
+    gen.generate(buf.data(), buf.size());
+
+    double sumPower = 0.0;
+    for (const auto& s : buf) sumPower += static_cast<double>(std::norm(s));
+    double avgPower = sumPower / static_cast<double>(buf.size());
+
+    double signalPower = 1.0; // amplitude^2, amplitude == 1
+    double expectedNoisePower = signalPower / std::pow(10.0, cfg.noiseSnrDb / 10.0);
+    double expectedTotal = signalPower + expectedNoisePower;
+    CHECK(std::abs(avgPower - expectedTotal) < expectedTotal * 0.15);
+  }
+
+  // Noise is mixed in after envelope/pulse gating, so it fills in the
+  // "silent" gaps between pulses too (a real RF noise floor doesn't turn
+  // off just because the signal did) -- unlike the noiseEnabled==false case
+  // above, where those same samples are exactly 0.
+  {
+    GeneratorConfig cfg;
+    cfg.type = WaveformType::Pulse;
+    cfg.sampleRateHz = sampleRate;
+    cfg.pulseDurationSec = 20e-6;
+    cfg.pulsePeriodSec = 40e-6;
+    cfg.amplitude = 1.0f;
+    cfg.noiseEnabled = true;
+    cfg.noiseSnrDb = 0.0f; // noise power == signal power -- easily visible
+    SignalGenerator gen(cfg);
+
+    std::vector<Sample> buf(40);
+    gen.generate(buf.data(), buf.size());
+
+    bool anyNonzeroInGap = false;
+    for (size_t i = 20; i < 40; ++i) {
+      if (buf[i].real() != 0.0f || buf[i].imag() != 0.0f) anyNonzeroInGap = true;
+    }
+    CHECK(anyNonzeroInGap);
+  }
 }

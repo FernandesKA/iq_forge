@@ -209,6 +209,12 @@ size_t SignalGenerator::generate(Sample* out, size_t count) {
   if (cfg.type == WaveformType::Pulse || cfg.envelopeEnabled) {
     applyEnvelope(out, count, cfg);
   }
+  // Applied last (after envelope/pulse gating), so the noise floor is
+  // continuous even during a pulse's off time -- a real RF channel's noise
+  // doesn't turn off just because the signal did.
+  if (cfg.noiseEnabled) {
+    applyNoise(out, count, cfg);
+  }
   return count;
 }
 
@@ -276,6 +282,20 @@ void SignalGenerator::applyEnvelope(Sample* out, size_t count, const GeneratorCo
     t += dt;
   }
   envelopeTime_ = std::fmod(t, period);
+}
+
+void SignalGenerator::applyNoise(Sample* out, size_t count, const GeneratorConfig& cfg) {
+  // Constant-envelope waveforms reach |sample| == cfg.amplitude, so that's
+  // the nominal signal power reference for the requested SNR (see
+  // GeneratorConfig::noiseEnabled). noisePower/2 splits it evenly between
+  // the I and Q components, same convention generateNoise() above already
+  // uses for its own (unconditional) noise.
+  const float signalPower = cfg.amplitude * cfg.amplitude;
+  const float noisePower = signalPower / std::pow(10.0f, cfg.noiseSnrDb / 10.0f);
+  const float sigma = std::sqrt(noisePower / 2.0f);
+  for (size_t i = 0; i < count; ++i) {
+    out[i] += Sample(sigma * noiseDist_(rng_), sigma * noiseDist_(rng_));
+  }
 }
 
 void SignalGenerator::generateBarker(Sample* out, size_t count, const GeneratorConfig& cfg) {

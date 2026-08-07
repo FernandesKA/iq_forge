@@ -104,6 +104,19 @@ struct GeneratorConfig {
   float prbsRrcRolloff = 0.35f; // 0..1, root-raised-cosine excess bandwidth
 
   float amplitude = 0.7f; // 0..1, leaves headroom to avoid clipping downstream
+
+  // Add noise: mixes complex Gaussian noise onto the generated waveform
+  // (any type, applied after envelope/pulse gating so the noise floor stays
+  // continuous even between pulses, like a real RF channel's does) at
+  // noiseSnrDb relative to `amplitude`. amplitude is used as the nominal
+  // signal power reference rather than a measured running average, since a
+  // single-pass generator has no lookahead to average over -- accurate for
+  // constant-envelope waveforms (Tone, Barker, PRBS BPSK/QPSK, ...), an
+  // approximation for the rest (MultiTone, Pulse's on-time, ...). Useful for
+  // testing a receive path under a controlled degraded SNR instead of a
+  // clean signal.
+  bool noiseEnabled = false;
+  float noiseSnrDb = 20.0f;
 };
 
 // Produces synthetic IQ test signals. Safe to reconfigure from another
@@ -129,6 +142,7 @@ class SignalGenerator : public ISampleSource {
   void generatePrbsBpsk(Sample* out, size_t count, const GeneratorConfig& cfg);
   void generatePrbsQpsk(Sample* out, size_t count, const GeneratorConfig& cfg);
   void applyEnvelope(Sample* out, size_t count, const GeneratorConfig& cfg);
+  void applyNoise(Sample* out, size_t count, const GeneratorConfig& cfg);
 
   // (Re)seeds the LFSR and, for the QPSK path, refills the RRC symbol
   // window -- called whenever the PRBS waveform is (re)selected or its

@@ -67,6 +67,9 @@ void drawHelpPanel(AppState&) {
       "PRBS QPSK + RRC shaping: off transmits raw bipolar chips (one +-amplitude sample per bit, like Barker); "
       "on maps bit pairs to QPSK symbols pulse-shaped by a root-raised-cosine filter -- e.g. for feeding a known "
       "bit pattern into an FPGA/demodulator under test.",
+      "Add noise: mixes complex Gaussian noise onto whatever waveform is configured, at the given SNR relative "
+      "to Amplitude -- applied after Pulse envelope gating, so the noise floor stays continuous even between "
+      "pulses. Useful for testing a receive path under a controlled degraded SNR instead of a clean signal.",
       "IQ file: Load reads (and, if enabled, resamples) the file on a background thread with a progress bar, so "
       "a large file or a large resample ratio doesn't freeze the GUI. Loop repeats the file; Resample on load "
       "converts it from the sample rate you specify to sampleRate x coefficient.",

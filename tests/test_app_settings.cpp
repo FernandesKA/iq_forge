@@ -43,6 +43,8 @@ void fillDistinctive(AppState& s) {
   s.genConfig.chirpDeviationHz = 500e3;
   s.genConfig.chirpDurationSec = 2e-3;
   s.genConfig.amplitude = 0.42f;
+  s.genConfig.noiseEnabled = true;
+  s.genConfig.noiseSnrDb = 15.5f;
   s.toneFreqUnit = FreqUnit::Hz;
   s.chirpDeviationUnit = FreqUnit::MHz;
   s.chirpDurationUnit = TimeUnit::Us;
@@ -93,6 +95,8 @@ void checkMatchesDistinctive(const AppState& s) {
   CHECK(s.genConfig.chirpDeviationHz == 500e3);
   CHECK(s.genConfig.chirpDurationSec == 2e-3);
   CHECK(s.genConfig.amplitude == 0.42f);
+  CHECK(s.genConfig.noiseEnabled == true);
+  CHECK(s.genConfig.noiseSnrDb == 15.5f);
   CHECK(s.toneFreqUnit == FreqUnit::Hz);
   CHECK(s.chirpDeviationUnit == FreqUnit::MHz);
   CHECK(s.chirpDurationUnit == TimeUnit::Us);

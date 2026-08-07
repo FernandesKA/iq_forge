@@ -281,6 +281,8 @@ nlohmann::json settingsToJson(const AppState& state) {
   gen["prbsQpskEnabled"] = g.prbsQpskEnabled;
   gen["prbsRrcRolloff"] = g.prbsRrcRolloff;
   gen["amplitude"] = g.amplitude;
+  gen["noiseEnabled"] = g.noiseEnabled;
+  gen["noiseSnrDb"] = g.noiseSnrDb;
 
   nlohmann::json file;
   file["path"] = std::string(state.filePathBuffer);
@@ -378,6 +380,8 @@ void applySettingsJson(AppState& state, const nlohmann::json& j) {
       g.prbsQpskEnabled = gen.value("prbsQpskEnabled", g.prbsQpskEnabled);
       g.prbsRrcRolloff = gen.value("prbsRrcRolloff", g.prbsRrcRolloff);
       g.amplitude = gen.value("amplitude", g.amplitude);
+      g.noiseEnabled = gen.value("noiseEnabled", g.noiseEnabled);
+      g.noiseSnrDb = gen.value("noiseSnrDb", g.noiseSnrDb);
       g.sampleRateHz = state.sampleRateHz;
       state.genConfig = g;
       state.generator->setConfig(g);
