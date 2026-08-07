@@ -13,6 +13,7 @@
 #include "log_panel.h"
 #include "panel_control.h"
 #include "panel_device.h"
+#include "panel_help.h"
 #include "panel_settings.h"
 #include "panel_spectrum_viewer.h"
 #include "panel_visualization.h"
@@ -49,6 +50,7 @@ void buildDefaultLayout(ImGuiID dockspaceId) {
   ImGui::DockBuilderDockWindow("RX", mainId);
   ImGui::DockBuilderDockWindow("SpectrumViewer", mainId);
   ImGui::DockBuilderDockWindow("Signal Viewer", mainId);
+  ImGui::DockBuilderDockWindow("Help", mainId);
   ImGui::DockBuilderDockWindow("Log", bottom);
   ImGui::DockBuilderDockWindow("Settings", bottom);
 
@@ -133,6 +135,7 @@ void App::run() {
     if (state_.showRxTab) drawRxVisualizationPanel(state_);
     if (state_.showSignalViewerTab) drawSignalViewerVisualizationPanel(state_);
     if (state_.showSpectrumViewerTab) drawSpectrumViewerPanel(state_);
+    drawHelpPanel(state_);
     drawLogPanel(state_);
 
     ImGui::Render();

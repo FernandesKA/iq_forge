@@ -48,6 +48,7 @@ add_executable(iqforge
   gui/src/load_progress.cpp
   gui/src/panel_device.cpp
   gui/src/panel_control.cpp
+  gui/src/panel_help.cpp
   gui/src/panel_tx.cpp
   gui/src/panel_rx.cpp
   gui/src/panel_signal_viewer.cpp
