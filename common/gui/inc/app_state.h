@@ -195,6 +195,35 @@ struct AppState {
   void stopSweep();
   void updateSweep();
 
+  // --- Signal Viewer (no device connection needed: load/preview/resample/
+  // write an IQ file directly, independent of TX/RX) ---
+  char svFilePathBuffer[512] = "";
+  bool svLoop = true;
+  // See fileSourceRateHz above for why raw formats need this typed in by
+  // hand; same SigMF auto-recovery applies here too.
+  double svSourceRateHz = 3e6;
+  FreqUnit svSourceRateUnit = FreqUnit::MHz;
+  bool svResampleEnabled = false;
+  double svResampleCoefficient = 1.0;
+  std::string svLoadedPath;
+  std::string svLoadError;
+  std::optional<SigmfMeta> svSigmfInfo;
+  // The buffer actually being previewed/saved -- already resampled at Load
+  // time if svResampleEnabled was on, so Save just writes svSource->data()
+  // as-is with no separate resample step of its own.
+  std::shared_ptr<IQFileSource> svSource;
+  double svActiveRateHz = 0.0; // svSource's sample rate (post-resample); drives the spectrum/time-domain X axis
+  double svCenterFreqHz = 0.0; // display reference only -- from SigMF capture freq if present, else 0; no device involved
+  std::vector<Sample> svTimeDomain;
+  std::vector<float> svSpectrumDb;
+  FftProcessor svFft{SpectrumConfig{static_cast<size_t>(fftSize), WindowType::Hann, 0.3f}};
+  std::deque<WaterfallRow> svWaterfallRows;
+  bool svFrozen = false;
+
+  enum class SvSaveFormat { Sigmf, Cf32Raw };
+  SvSaveFormat svSaveFormat = SvSaveFormat::Sigmf;
+  char svSavePathBuffer[512] = "";
+
   // --- Log ---
   std::mutex logMutex;
   std::deque<std::string> logMessages;

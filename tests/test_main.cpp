@@ -7,6 +7,7 @@ void run_signal_generator_tests();
 void run_iq_file_tests();
 void run_fft_processor_tests();
 void run_resampler_tests();
+void run_async_iq_load_tests();
 void run_app_settings_tests();
 
 int main() {
@@ -15,6 +16,7 @@ int main() {
   run_iq_file_tests();
   run_fft_processor_tests();
   run_resampler_tests();
+  run_async_iq_load_tests();
   run_app_settings_tests();
 
   if (g_failures == 0) {

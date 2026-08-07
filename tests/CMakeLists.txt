@@ -5,6 +5,7 @@ add_executable(iqforge_tests
   test_iq_file.cpp
   test_fft_processor.cpp
   test_resampler.cpp
+  test_async_iq_load.cpp
   test_app_settings.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/gui/src/app_state.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/gui/src/app_settings.cpp

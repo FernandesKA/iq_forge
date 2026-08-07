@@ -226,6 +226,15 @@ AppState::RxSaveFormat rxSaveFormatFromName(const std::string& s, AppState::RxSa
   return fallback;
 }
 
+const char* svSaveFormatName(AppState::SvSaveFormat f) {
+  return f == AppState::SvSaveFormat::Cf32Raw ? "Cf32Raw" : "Sigmf";
+}
+AppState::SvSaveFormat svSaveFormatFromName(const std::string& s, AppState::SvSaveFormat fallback) {
+  if (s == "Cf32Raw") return AppState::SvSaveFormat::Cf32Raw;
+  if (s == "Sigmf") return AppState::SvSaveFormat::Sigmf;
+  return fallback;
+}
+
 nlohmann::json settingsToJson(const AppState& state) {
   nlohmann::json j;
 
@@ -292,6 +301,17 @@ nlohmann::json settingsToJson(const AppState& state) {
   rx["recordPath"] = std::string(state.rxRecordPathBuffer);
   rx["recordDescription"] = std::string(state.rxRecordDescriptionBuffer);
   j["rx"] = std::move(rx);
+
+  nlohmann::json sv;
+  sv["path"] = std::string(state.svFilePathBuffer);
+  sv["loop"] = state.svLoop;
+  sv["sourceRateHz"] = state.svSourceRateHz;
+  sv["sourceRateUnit"] = freqUnitName(state.svSourceRateUnit);
+  sv["resampleEnabled"] = state.svResampleEnabled;
+  sv["resampleCoefficient"] = state.svResampleCoefficient;
+  sv["saveFormat"] = svSaveFormatName(state.svSaveFormat);
+  sv["savePath"] = std::string(state.svSavePathBuffer);
+  j["signalViewer"] = std::move(sv);
 
   return j;
 }
@@ -372,6 +392,18 @@ void applySettingsJson(AppState& state, const nlohmann::json& j) {
     state.rxSaveFormat = rxSaveFormatFromName(rx.value("saveFormat", std::string()), state.rxSaveFormat);
     setBuf(state.rxRecordPathBuffer, rx.value("recordPath", std::string(state.rxRecordPathBuffer)));
     setBuf(state.rxRecordDescriptionBuffer, rx.value("recordDescription", std::string(state.rxRecordDescriptionBuffer)));
+  }
+
+  if (j.contains("signalViewer")) {
+    const auto& sv = j.at("signalViewer");
+    setBuf(state.svFilePathBuffer, sv.value("path", std::string(state.svFilePathBuffer)));
+    state.svLoop = sv.value("loop", state.svLoop);
+    state.svSourceRateHz = sv.value("sourceRateHz", state.svSourceRateHz);
+    state.svSourceRateUnit = freqUnitFromName(sv.value("sourceRateUnit", std::string()), state.svSourceRateUnit);
+    state.svResampleEnabled = sv.value("resampleEnabled", state.svResampleEnabled);
+    state.svResampleCoefficient = sv.value("resampleCoefficient", state.svResampleCoefficient);
+    state.svSaveFormat = svSaveFormatFromName(sv.value("saveFormat", std::string()), state.svSaveFormat);
+    setBuf(state.svSavePathBuffer, sv.value("savePath", std::string(state.svSavePathBuffer)));
   }
 }
 

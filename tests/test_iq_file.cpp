@@ -55,6 +55,23 @@ void run_iq_file_tests() {
     std::vector<Sample> out2(7);
     size_t n2 = oneShot.generate(out2.data(), out2.size());
     CHECK(n2 == 3); // stops at EOF, doesn't wrap
+
+    // data() exposes exactly what was constructed with -- needed by Signal
+    // Viewer's Save button, which writes back whatever's currently loaded
+    // (possibly after a resample) rather than re-reading the original file.
+    CHECK(looping.data().size() == data.size());
+    for (size_t i = 0; i < data.size(); ++i) CHECK(looping.data()[i] == data[i]);
+  }
+
+  // sigmfBasePath: strips a trailing extension so the result is usable as
+  // saveSigmf()'s basePath, but only past the last path separator, and only
+  // if there is one.
+  {
+    CHECK(sigmfBasePath("rec.sigmf-data") == "rec");
+    CHECK(sigmfBasePath("rec.cf32") == "rec");
+    CHECK(sigmfBasePath("/tmp/dir.with.dots/rec.cf32") == "/tmp/dir.with.dots/rec");
+    CHECK(sigmfBasePath("/tmp/no_extension") == "/tmp/no_extension");
+    CHECK(sigmfBasePath("rec") == "rec");
   }
 
   // SigMF round trip: save with metadata + annotations, then reload via

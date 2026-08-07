@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "sample_types.h"
 
 namespace iqforge {
@@ -16,7 +18,18 @@ enum class ResampleQuality { Best, Medium, Fastest };
 // relies on when handing Sample* to ImPlot -- see plot_time_domain.cpp).
 // Throws std::runtime_error if the rates are invalid or the conversion
 // ratio is outside libsamplerate's supported range (roughly 1:256..256:1).
+//
+// Processes `input` in chunks against libsamplerate's stateful streaming API
+// rather than one single-shot call, purely so `onProgress` (if given) can be
+// called with a 0..1 fraction of input consumed so far as the conversion
+// proceeds -- a whole-file sinc conversion can take many seconds, and
+// without this a caller driving a progress bar (see AsyncIqLoadJob) would
+// have nothing to report until the entire thing finished. Output is
+// bit-identical to what a single-shot conversion of the same input would
+// produce; chunking is purely an implementation/progress-reporting detail,
+// not a behavior change.
 SampleBuffer resampleIq(const SampleBuffer& input, double inputRateHz, double outputRateHz,
-                         ResampleQuality quality = ResampleQuality::Best);
+                         ResampleQuality quality = ResampleQuality::Best,
+                         const std::function<void(float)>& onProgress = nullptr);
 
 } // namespace iqforge

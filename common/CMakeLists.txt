@@ -3,6 +3,7 @@ add_library(iqforge_core STATIC
   dsp/src/iq_file.cpp
   dsp/src/fft_processor.cpp
   dsp/src/resampler.cpp
+  dsp/src/async_iq_load.cpp
   devices/src/pluto_device.cpp
   devices/src/hackrf_device.cpp
   devices/src/device_manager.cpp
@@ -44,9 +45,11 @@ add_executable(iqforge
   gui/src/freq_input.cpp
   gui/src/duration_input.cpp
   gui/src/file_browser.cpp
+  gui/src/load_progress.cpp
   gui/src/panel_device.cpp
   gui/src/panel_tx.cpp
   gui/src/panel_rx.cpp
+  gui/src/panel_signal_viewer.cpp
   gui/src/panel_visualization.cpp
   gui/src/panel_spectrum_viewer.cpp
   gui/src/plot_time_domain.cpp

@@ -252,4 +252,14 @@ void drawRxVisualizationPanel(AppState& state) {
   if (req.retuneRequested) applyCenterFreqRetune(state, req.retuneToHz);
 }
 
+void drawSignalViewerVisualizationPanel(AppState& state) {
+  static VisualizationTabState tab;
+  VisualizationRequest req =
+      drawVisualizationWindow("Signal Viewer", tab, state.svTimeDomain, state.svSpectrumDb, state.svWaterfallRows,
+                               state.svActiveRateHz, state.svCenterFreqHz, state.svFrozen);
+  // No device to retune -- this mode works without one -- so a marker's
+  // "-> Center freq" just updates the display reference used for the axis.
+  if (req.retuneRequested) state.svCenterFreqHz = req.retuneToHz;
+}
+
 } // namespace iqforge

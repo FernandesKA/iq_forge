@@ -6,11 +6,12 @@
 #include <cmath>
 #include <memory>
 
+#include "async_iq_load.h"
 #include "iq_file.h"
-#include "resampler.h"
 #include "duration_input.h"
 #include "file_browser.h"
 #include "freq_input.h"
+#include "load_progress.h"
 #include "plot_format.h"
 
 namespace iqforge {
@@ -241,86 +242,104 @@ void drawTxPanel(AppState& state) {
       }
     }
 
+    // Loading (and, worse, resampling -- a sinc convolution over a whole
+    // file, easily seconds for a large file or a large ratio) used to run
+    // directly in this button handler, freezing the whole GUI with no
+    // feedback until it finished. AsyncIqLoadJob runs it on a background
+    // thread instead; the Load button just starts the job and this frame
+    // (and every frame after, via the progress bar below) moves on.
+    static AsyncIqLoadJob loadJob;
+    bool jobRunning = loadJob.running();
+
+    ImGui::BeginDisabled(jobRunning);
     if (ImGui::Button("Load")) {
-      try {
-        auto [raw, sigmf] = loadIqFileWithSigmf(state.filePathBuffer);
-        state.fileSigmfInfo = sigmf;
-        if (sigmf && sigmf->hasSampleRate) {
+      loadJob.start(state.filePathBuffer, state.fileResampleEnabled, state.fileSourceRateHz,
+                    state.fileResampleCoefficient);
+    }
+    ImGui::EndDisabled();
+
+    if (loadJob.finished()) {
+      AsyncIqLoadJob::Result result = loadJob.take();
+      if (result.success) {
+        state.fileSigmfInfo = result.sigmf;
+        if (result.sigmf && result.sigmf->hasSampleRate) {
           // Raw .cf32/.ci16 have no way to carry their own sample rate, so
           // normally the user has to type it in manually (see
           // fileSourceRateHz's declaration); a SigMF sidecar supplies it
           // directly. Center frequency is intentionally *not* auto-applied
           // here -- see the "Apply to device" button below, since silently
           // retuning connected hardware from a file load would be surprising.
-          state.fileSourceRateHz = sigmf->sampleRateHz;
-          state.log("SigMF: recovered sample rate " + formatHz(sigmf->sampleRateHz));
+          state.fileSourceRateHz = result.sourceRateHz;
+          state.log("SigMF: recovered sample rate " + formatHz(result.sourceRateHz));
         }
-        SampleBuffer ready;
         if (state.fileResampleEnabled) {
-          double targetRateHz = state.fileSourceRateHz * state.fileResampleCoefficient;
-          ready = resampleIq(raw, state.fileSourceRateHz, targetRateHz);
-          state.log("Resampled IQ file from " + formatHz(state.fileSourceRateHz) + " to " + formatHz(targetRateHz) +
-                     " (x" + std::to_string(state.fileResampleCoefficient) + ", " + std::to_string(raw.size()) +
-                     " -> " + std::to_string(ready.size()) + " samples)");
-        } else {
-          ready = std::move(raw);
+          state.log("Resampled IQ file from " + formatHz(result.sourceRateHz) + " to " +
+                     formatHz(result.resultRateHz) + " (x" + std::to_string(state.fileResampleCoefficient) + ", " +
+                     std::to_string(result.inputSampleCount) + " -> " + std::to_string(result.buffer.size()) +
+                     " samples)");
         }
         // Also used by the idle preview below and by Start TX -- loading
         // immediately makes the file's signal/spectrum visible without
         // having to transmit first, same as the generator preview.
-        state.fileSource = std::make_shared<IQFileSource>(std::move(ready), state.fileLoop);
+        state.fileSource = std::make_shared<IQFileSource>(std::move(result.buffer), state.fileLoop);
         state.fileLoadedPath = state.filePathBuffer;
         state.fileLoadError.clear();
         state.log("Loaded IQ file: " + state.fileLoadedPath + " (" +
                    std::to_string(state.fileSource->totalSamples()) + " samples)");
-      } catch (const std::exception& e) {
-        state.fileLoadError = e.what();
+      } else {
+        state.fileLoadError = result.errorMessage;
         state.fileSource.reset();
         state.fileLoadedPath.clear();
         state.fileSigmfInfo.reset();
         state.log("IQ file load failed: " + state.fileLoadError);
       }
     }
-    // Status text can be an arbitrary (possibly long) file path or error
-    // message, so it wraps within the panel's width instead of either
-    // overflowing off-screen or being force-fit onto one line.
-    bool loaded = state.fileSource && state.fileLoadedPath == state.filePathBuffer;
-    ImGui::PushTextWrapPos(0.0f);
-    if (loaded) {
-      ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Loaded: %zu samples", state.fileSource->totalSamples());
-      if (state.fileSigmfInfo) {
-        const SigmfMeta& meta = *state.fileSigmfInfo;
-        if (!meta.hw.empty()) ImGui::TextDisabled("SigMF hw: %s", meta.hw.c_str());
-        if (!meta.description.empty()) ImGui::TextDisabled("SigMF description: %s", meta.description.c_str());
-        if (!meta.captures.empty() && meta.captures.front().hasFrequency) {
-          double freqHz = meta.captures.front().frequencyHz;
-          ImGui::TextDisabled("SigMF center freq: %s", formatHz(freqHz).c_str());
-          ImGui::SameLine();
-          if (ImGui::SmallButton("Apply to device")) {
-            state.centerFreqHz = freqHz;
-            IDevice* dev = state.deviceManager.device();
-            if (dev && !dev->setFrequency(freqHz)) {
-              state.log("Apply SigMF center freq: rejected by device");
-            } else {
-              state.log("Apply SigMF center freq: " + formatHz(freqHz) + (dev ? " (tuned)" : " (no device connected)"));
+
+    if (jobRunning) {
+      drawLoadProgressBar(loadJob);
+    } else {
+      // Status text can be an arbitrary (possibly long) file path or error
+      // message, so it wraps within the panel's width instead of either
+      // overflowing off-screen or being force-fit onto one line.
+      bool loaded = state.fileSource && state.fileLoadedPath == state.filePathBuffer;
+      ImGui::PushTextWrapPos(0.0f);
+      if (loaded) {
+        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Loaded: %zu samples", state.fileSource->totalSamples());
+        if (state.fileSigmfInfo) {
+          const SigmfMeta& meta = *state.fileSigmfInfo;
+          if (!meta.hw.empty()) ImGui::TextDisabled("SigMF hw: %s", meta.hw.c_str());
+          if (!meta.description.empty()) ImGui::TextDisabled("SigMF description: %s", meta.description.c_str());
+          if (!meta.captures.empty() && meta.captures.front().hasFrequency) {
+            double freqHz = meta.captures.front().frequencyHz;
+            ImGui::TextDisabled("SigMF center freq: %s", formatHz(freqHz).c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Apply to device")) {
+              state.centerFreqHz = freqHz;
+              IDevice* dev = state.deviceManager.device();
+              if (dev && !dev->setFrequency(freqHz)) {
+                state.log("Apply SigMF center freq: rejected by device");
+              } else {
+                state.log("Apply SigMF center freq: " + formatHz(freqHz) +
+                           (dev ? " (tuned)" : " (no device connected)"));
+              }
+            }
+          }
+          if (!meta.annotations.empty()) {
+            ImGui::TextDisabled("SigMF annotations (%zu):", meta.annotations.size());
+            for (const auto& ann : meta.annotations) {
+              ImGui::BulletText("sample %llu (%llu samples)%s%s", static_cast<unsigned long long>(ann.sampleStart),
+                                 static_cast<unsigned long long>(ann.sampleCount), ann.label.empty() ? "" : "  ",
+                                 ann.label.c_str());
             }
           }
         }
-        if (!meta.annotations.empty()) {
-          ImGui::TextDisabled("SigMF annotations (%zu):", meta.annotations.size());
-          for (const auto& ann : meta.annotations) {
-            ImGui::BulletText("sample %llu (%llu samples)%s%s", static_cast<unsigned long long>(ann.sampleStart),
-                               static_cast<unsigned long long>(ann.sampleCount), ann.label.empty() ? "" : "  ",
-                               ann.label.c_str());
-          }
-        }
+      } else if (!state.fileLoadError.empty()) {
+        ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s", state.fileLoadError.c_str());
+      } else {
+        ImGui::TextDisabled("Not loaded -- click Load to preview the signal/spectrum before transmitting");
       }
-    } else if (!state.fileLoadError.empty()) {
-      ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "%s", state.fileLoadError.c_str());
-    } else {
-      ImGui::TextDisabled("Not loaded -- click Load to preview the signal/spectrum before transmitting");
+      ImGui::PopTextWrapPos();
     }
-    ImGui::PopTextWrapPos();
     ImGui::EndDisabled();
 
     DrawIqFileBrowserPopup("Select IQ file", browseClicked, state.filePathBuffer, sizeof(state.filePathBuffer));

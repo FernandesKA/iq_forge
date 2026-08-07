@@ -123,6 +123,22 @@ void AppState::updateDisplays() {
 
   if (gotTx) pushWaterfallRow(txWaterfallRows, txSpectrumDb, kWaterfallMaxRows);
 
+  // Signal Viewer has no "active" state to gate on (no device, no TX/RX) --
+  // whatever's loaded just previews continuously, same idle-preview trick as
+  // the TX file source above, until frozen or nothing is loaded.
+  bool gotSv = false;
+  if (!svFrozen && svSource) {
+    block.resize(kGeneratorPreviewSamples);
+    size_t got = svSource->generate(block.data(), block.size());
+    if (got > 0) {
+      block.resize(got);
+      gotSv = true;
+      appendTrim(svTimeDomain, block, kTimeDomainMaxSamples);
+      processSpectrum(svFft, block, svSpectrumDb);
+    }
+  }
+  if (gotSv) pushWaterfallRow(svWaterfallRows, svSpectrumDb, kWaterfallMaxRows);
+
   updateSweep();
 }
 

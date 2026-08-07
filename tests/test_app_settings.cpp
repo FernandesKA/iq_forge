@@ -56,6 +56,15 @@ void fillDistinctive(AppState& s) {
   s.rxSaveFormat = AppState::RxSaveFormat::Cf32Raw;
   std::snprintf(s.rxRecordPathBuffer, sizeof(s.rxRecordPathBuffer), "/tmp/out.cf32");
   std::snprintf(s.rxRecordDescriptionBuffer, sizeof(s.rxRecordDescriptionBuffer), "test capture");
+
+  std::snprintf(s.svFilePathBuffer, sizeof(s.svFilePathBuffer), "/tmp/some_other_capture.wav");
+  s.svLoop = false;
+  s.svSourceRateHz = 1.8e6;
+  s.svSourceRateUnit = FreqUnit::kHz;
+  s.svResampleEnabled = true;
+  s.svResampleCoefficient = 0.75;
+  s.svSaveFormat = AppState::SvSaveFormat::Cf32Raw;
+  std::snprintf(s.svSavePathBuffer, sizeof(s.svSavePathBuffer), "/tmp/sv_out.cf32");
 }
 
 void checkMatchesDistinctive(const AppState& s) {
@@ -92,6 +101,15 @@ void checkMatchesDistinctive(const AppState& s) {
   CHECK(s.rxSaveFormat == AppState::RxSaveFormat::Cf32Raw);
   CHECK(std::string(s.rxRecordPathBuffer) == "/tmp/out.cf32");
   CHECK(std::string(s.rxRecordDescriptionBuffer) == "test capture");
+
+  CHECK(std::string(s.svFilePathBuffer) == "/tmp/some_other_capture.wav");
+  CHECK(s.svLoop == false);
+  CHECK(s.svSourceRateHz == 1.8e6);
+  CHECK(s.svSourceRateUnit == FreqUnit::kHz);
+  CHECK(s.svResampleEnabled == true);
+  CHECK(s.svResampleCoefficient == 0.75);
+  CHECK(s.svSaveFormat == AppState::SvSaveFormat::Cf32Raw);
+  CHECK(std::string(s.svSavePathBuffer) == "/tmp/sv_out.cf32");
 }
 } // namespace
 

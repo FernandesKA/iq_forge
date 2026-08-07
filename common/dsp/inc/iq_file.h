@@ -80,6 +80,12 @@ bool isSigmfPath(const std::string& path);
 std::string sigmfDataPath(const std::string& path);
 std::string sigmfMetaPath(const std::string& path);
 
+// Strips a trailing extension (anything after the last '.' that comes after
+// the last path separator) so the result can be handed to saveSigmf() as
+// `basePath` -- e.g. "rec.sigmf-data" and "rec.cf32" both become "rec". A
+// path with no extension is returned unchanged.
+std::string sigmfBasePath(const std::string& path);
+
 // Parses a `.sigmf-meta` JSON file. Throws std::runtime_error on I/O or
 // malformed-JSON errors.
 SigmfMeta loadSigmfMeta(const std::string& metaPath);
@@ -123,6 +129,7 @@ class IQFileSource : public ISampleSource {
   size_t totalSamples() const { return data_.size(); }
   size_t position() const { return pos_; }
   void reset() { pos_ = 0; }
+  const SampleBuffer& data() const { return data_; }
 
  private:
   SampleBuffer data_;

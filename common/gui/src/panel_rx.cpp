@@ -8,13 +8,6 @@
 namespace iqforge {
 
 namespace {
-std::string basePathWithoutExtension(const std::string& path) {
-  auto slash = path.find_last_of("/\\");
-  auto dot = path.find_last_of('.');
-  if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return path;
-  return path.substr(0, dot);
-}
-
 // "PlutoSDR (usb:1.5.5)" / "HackRF (0000...)" -- SigMF core:hw, empty if no
 // device was ever connected this session.
 std::string describeHardware(const AppState& state) {
@@ -149,7 +142,7 @@ void drawRxPanel(AppState& state) {
     try {
       std::string path = state.rxRecordPathBuffer;
       if (state.rxSaveFormat == AppState::RxSaveFormat::Sigmf) {
-        std::string basePath = basePathWithoutExtension(path);
+        std::string basePath = sigmfBasePath(path);
         saveSigmf(basePath, state.rxRecordBuffer.data(), state.rxRecordBuffer.size(), buildSigmfMeta(state));
         state.log("Saved SigMF recording to " + basePath + ".sigmf-data/.sigmf-meta");
       } else {

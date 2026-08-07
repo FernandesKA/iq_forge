@@ -195,6 +195,13 @@ std::string sigmfMetaPath(const std::string& path) {
   return path;
 }
 
+std::string sigmfBasePath(const std::string& path) {
+  auto slash = path.find_last_of("/\\");
+  auto dot = path.find_last_of('.');
+  if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return path;
+  return path.substr(0, dot);
+}
+
 std::string isoTimestampNowUtc() {
   using namespace std::chrono;
   auto now = system_clock::now();

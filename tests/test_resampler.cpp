@@ -1,4 +1,5 @@
 #include <cmath>
+#include <vector>
 
 #include "resampler.h"
 #include "test_framework.h"
@@ -109,5 +110,43 @@ void run_resampler_tests() {
       threw = true;
     }
     CHECK(threw);
+  }
+
+  // resampleIq() processes the input in fixed-size chunks against
+  // libsamplerate's streaming API (purely so onProgress can report partial
+  // completion -- see resampler.h) rather than one single-shot call, so
+  // correctness has to hold up across a chunk boundary too, not just for an
+  // input that fits in one chunk. 200k frames spans multiple 64k-frame
+  // chunks plus a partial one.
+  {
+    constexpr double kInRate = 2e6;
+    constexpr double kOutRate = 1e6;
+    constexpr double kToneHz = 75e3;
+    SampleBuffer in = makeTone(kToneHz, kInRate, 200000);
+
+    std::vector<float> progressCalls;
+    SampleBuffer out = resampleIq(in, kInRate, kOutRate, ResampleQuality::Best,
+                                   [&](float frac) { progressCalls.push_back(frac); });
+
+    double expectedLen = static_cast<double>(in.size()) * (kOutRate / kInRate);
+    CHECK(std::abs(static_cast<double>(out.size()) - expectedLen) < expectedLen * 0.01);
+    double measuredHz = estimateToneFreqHz(out, kOutRate);
+    CHECK(std::abs(measuredHz - kToneHz) < 1e3);
+
+    // Multiple chunks -> multiple progress reports, ending at exactly done,
+    // and never going backwards (each chunk only adds to input consumed).
+    CHECK(progressCalls.size() > 1);
+    CHECK(progressCalls.back() == 1.0f);
+    for (size_t i = 1; i < progressCalls.size(); ++i) CHECK(progressCalls[i] >= progressCalls[i - 1]);
+    for (float f : progressCalls) CHECK(f >= 0.0f && f <= 1.0f);
+  }
+
+  // No-op (ratio == 1) fast path still reports 100% so a caller relying on
+  // onProgress to know when it's done isn't left hanging.
+  {
+    bool calledWithOne = false;
+    resampleIq(makeTone(10e3, 1e6, 500), 1e6, 1e6, ResampleQuality::Best,
+               [&](float frac) { calledWithOne = (frac == 1.0f); });
+    CHECK(calledWithOne);
   }
 }

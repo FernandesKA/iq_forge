@@ -10,5 +10,10 @@ namespace iqforge {
 // transmitted (generator/file preview); RX shows what's being received.
 void drawTxVisualizationPanel(AppState& state);
 void drawRxVisualizationPanel(AppState& state);
+// Signal Viewer shows whatever file panel_signal_viewer.cpp currently has
+// loaded -- no device/TX/RX involved, so its "-> Center freq" marker action
+// just updates the display reference (state.svCenterFreqHz) instead of
+// retuning any hardware.
+void drawSignalViewerVisualizationPanel(AppState& state);
 
 } // namespace iqforge
