@@ -1,0 +1,9 @@
+[submodule "iq_forge_hdl"]
+	path = iq_forge_hdl
+	url = git@github.com:FernandesKA/iq_forge_hdl.git
+[submodule "iq_forge_fw"]
+	path = iq_forge_fw
+	url = git@github.com:FernandesKA/iq_forge_fw.git
+[submodule "iq_forge_gui"]
+	path = iq_forge_gui
+	url = git@github.com:FernandesKA/iq_forge_gui.git
