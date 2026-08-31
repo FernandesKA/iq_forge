@@ -7,3 +7,6 @@
 [submodule "iq_forge_gui"]
 	path = iq_forge_gui
 	url = git@github.com:FernandesKA/iq_forge_gui.git
+[submodule "buildroot_custom"]
+	path = buildroot_custom
+	url = git@github.com:FernandesKA/buildroot_custom.git
