@@ -10,10 +10,10 @@ FPGA-логика LVDS-интерфейса, embedded Linux (Buildroot), кон�
 
 | Сабмодуль | Что внутри |
 |---|---|
-| [`iq_forge_hdl`](iq_forge_hdl) | Vivado-проект: RTL LVDS TX/RX интерфейса к AD9361, DDS, block design и констрейны под каждую плату |
-| [`iq_forge_fw`](iq_forge_fw) | Кросс-компилируемое CLI-приложение на таргете: поднимает FPGA-битстрим, накатывает device-tree overlay, конфигурирует AD9361 по SPI (no-OS драйвер) |
-| [`buildroot_custom`](buildroot_custom) | Buildroot BR2_EXTERNAL: сборка Linux образа и U-Boot (включая `ps7_init` — тактирование PS7) под каждую плату |
-| [`iq_forge_gui`](iq_forge_gui) | Десктопное приложение: TX-генератор, RX/спектр/водопад, работает с PlutoSDR и HackRF напрямую по сети/USB (пока не зависит от остального стека) |
+| [`iq_forge_hdl`](https://github.com/FernandesKA/iq_forge_hdl) | Vivado-проект: RTL LVDS TX/RX интерфейса к AD9361, DDS, block design и констрейны под каждую плату |
+| [`iq_forge_fw`](https://github.com/FernandesKA/iq_forge_fw) | Кросс-компилируемое CLI-приложение на таргете: поднимает FPGA-битстрим, накатывает device-tree overlay, конфигурирует AD9361 по SPI (no-OS драйвер) |
+| [`buildroot_custom`](https://github.com/FernandesKA/buildroot_custom) | Buildroot BR2_EXTERNAL: сборка Linux образа и U-Boot (включая `ps7_init` — тактирование PS7) под каждую плату |
+| [`iq_forge_gui`](https://github.com/FernandesKA/iq_forge_gui) | Десктопное приложение: TX-генератор, RX/спектр/водопад, работает с PlutoSDR и HackRF напрямую по сети/USB (пока не зависит от остального стека) |
 
 Подробности по каждой части — в README соответствующего сабмодуля.
 
